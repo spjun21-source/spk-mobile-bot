@@ -1,0 +1,8 @@
+__pycache__/
+.env
+venv/
+*.pyc
+*.log
+*.pid
+config.json
+accounts.json
