@@ -1,11 +1,21 @@
-
 import requests
 import json
 import time
 import sys
+import io
+import os
 import threading
 import schedule
-import os
+import atexit
+
+# Windows: 콘솔/로그 cp949로 인한 이모지(❌ 등) UnicodeEncodeError 방지
+if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from src.clients.xing_rest import XingRestTrader
 from src.clients.gemini import GeminiAdvisor
 from src.clients.xing_realtime import XingRealtimeClient, parse_futures_execution, parse_futures_orderbook, TR_DESCRIPTIONS
@@ -96,7 +106,7 @@ def send_message(chat_id, text, parse_mode="Markdown"):
                 send_message(chat_id, text, parse_mode=None)
                 
     except Exception as e:
-        print(f"❌ Error sending message: {e}")
+        print(f"[Error] sending message: {e}")
 
 def get_price_data(code):
     """
@@ -202,13 +212,13 @@ def handle_command(chat_id, text):
     if cmd == "/subscribe":
         position = text.replace("/subscribe", "").strip()
         if not position:
-            send_message(chat_id, "💡 사용법: `/subscribe [나의 포지션]`\n예시: `/subscribe 코스피 선물 1계약 매수`\n매일 아침 06:00, 08:50에 맞춤형 장전 시나리오를 자동으로 보내드립니다.")
+            send_message(chat_id, "💡 사용법: `/subscribe [나의 포지션]`\n예시: `/subscribe 삼성전자 10주, 코스피200 선물 1개, 위클리 옵션 4계약(풋/콜) 매수·매도`\n매일 **05:00** 야간장 마감 분석, **08:50** 장전 포지션 시나리오 보고서를 자동 발송합니다.")
             return
             
         subs = load_subscribers()
         subs[str(chat_id)] = position
         save_subscribers(subs)
-        send_message(chat_id, f"✅ **구독 완료!**\n저장된 포지션: `{position}`\n앞으로 장 시작 전 시나리오 리포트를 자동으로 보내드립니다.")
+        send_message(chat_id, f"✅ **구독 완료!**\n저장된 포지션: `{position}`\n매일 05:00(야간장 마감), 08:50(장전 시나리오) 보고서를 보내드립니다.")
         return
         
     elif cmd == "/unsubscribe":
@@ -216,7 +226,7 @@ def handle_command(chat_id, text):
         if str(chat_id) in subs:
             del subs[str(chat_id)]
             save_subscribers(subs)
-            send_message(chat_id, "❌ **구독 취소 완료**\n더 이상 아침 리포트를 보내지 않습니다.")
+            send_message(chat_id, "[완료] **구독 취소 완료**\n더 이상 아침 리포트를 보내지 않습니다.")
         else:
             send_message(chat_id, "현재 구독 중이 아닙니다.")
         return
@@ -324,7 +334,7 @@ def handle_command(chat_id, text):
                  )
                  send_message(chat_id, msg)
         else:
-            send_message(chat_id, f"❌ Could not fetch data for `{code}`")
+            send_message(chat_id, f"[오류] Could not fetch data for `{code}`")
 
     elif cmd == "/analyze":
         if len(parts) < 2:
@@ -337,7 +347,7 @@ def handle_command(chat_id, text):
         # 1. Get Data (Xing realtime)
         data = get_price_data(code)
         if not data:
-            send_message(chat_id, f"❌ No market data found for {code}. Cannot analyze.")
+            send_message(chat_id, f"[오류] No market data found for {code}. Cannot analyze.")
             return
         
         # 2. Enrich with public data (전일 종가 context)
@@ -391,9 +401,9 @@ def handle_command(chat_id, text):
              ord_no = result["CFOAT00100OutBlock1"]["OrdNo"]
              send_message(chat_id, f"✅ **Order Placed!**\nNumber: `{ord_no}`\n{cmd.upper()} {qty} of {code} at {price}")
         elif result and "rsp_msg" in result:
-             send_message(chat_id, f"❌ Order Failed: {result['rsp_msg']}")
+             send_message(chat_id, f"[오류] Order Failed: {result['rsp_msg']}")
         else:
-             send_message(chat_id, f"❌ Order Failed (Unknown Error): {result}")
+             send_message(chat_id, f"[오류] Order Failed (Unknown Error): {result}")
 
     elif cmd == "/realtime":
         if len(parts) < 2:
@@ -482,7 +492,7 @@ def handle_command(chat_id, text):
             msg = PublicDataClient.format_futures_table(data)
             send_message(chat_id, msg)
         except Exception as e:
-            send_message(chat_id, f"❌ 선물 시세 조회 실패: {e}")
+            send_message(chat_id, f"[오류] 선물 시세 조회 실패: {e}")
 
     elif cmd == "/options":
         bas_dt = parts[1] if len(parts) > 1 else None
@@ -492,7 +502,7 @@ def handle_command(chat_id, text):
             msg = PublicDataClient.format_options_table(data)
             send_message(chat_id, msg)
         except Exception as e:
-            send_message(chat_id, f"❌ 옵션 시세 조회 실패: {e}")
+            send_message(chat_id, f"[오류] 옵션 시세 조회 실패: {e}")
 
     elif cmd == "/market":
         send_message(chat_id, "🏦 시장 종합 분석 중... (공공데이터 + AI)")
@@ -515,7 +525,7 @@ def handle_command(chat_id, text):
                 analysis = advisor.get_analysis(ai_ctx, symbol="코스피200 선물")
                 send_message(chat_id, f"🤖 **AI 시장 분석**\n\n{analysis}")
         except Exception as e:
-            send_message(chat_id, f"❌ 시장 종합 조회 실패: {e}")
+            send_message(chat_id, f"[오류] 시장 종합 조회 실패: {e}")
 
     elif cmd == "/rt_status":
         if realtime_client:
@@ -538,14 +548,14 @@ def handle_command(chat_id, text):
 
     else:
         # Natural Language Handling (Conversational Intent Routing)
-        send_message(chat_id, "🧠 분석 중입니다...")
+        send_message(chat_id, "🧠 분석 중입니다. (30초~1분 소요, 잠시만 기다려 주세요.)")
         
         try:
             # 1. Analyze Intent
             intent_json = advisor.analyze_intent(text)
             
-            # If the API returned an error string instead of JSON, forward it
-            if intent_json.startswith("⚠️") or intent_json.startswith("❌"):
+            # API가 에러/안내 문자열을 반환한 경우 그대로 전달 (JSON 파싱하지 않음)
+            if intent_json.startswith("⚠️") or intent_json.startswith("[오류]") or intent_json.startswith("[안내]"):
                 send_message(chat_id, intent_json)
                 return
                 
@@ -565,7 +575,7 @@ def handle_command(chat_id, text):
                         data['asset_name'] = name # Inject for Gemini to use
                         reply = advisor.format_response(text, data, data_type="price")
                     else:
-                        reply = f"❌ `{target_code}`에 대한 가격 데이터를 찾을 수 없어요."
+                        reply = f"[오류] `{target_code}`에 대한 가격 데이터를 찾을 수 없어요."
                 else:
                     reply = "어떤 종목의 가격을 원하시는지 말씀해 주세요! (예: 삼성전자 가격 알려줘)"
             
@@ -590,7 +600,7 @@ def handle_command(chat_id, text):
                     reply = "무엇을 검색해 드릴까요? (예: 미국 나스닥 상황 알려줘)"
 
             elif action == "portfolio_strategy":
-                send_message(chat_id, "📊 보유 포지션 기반 프리마켓 시나리오 분석 중...\n(미국/한국 시장 데이터 수집 및 분석에 10~15초 소요)")
+                send_message(chat_id, "📊 보유 포지션 기반 프리마켓 시나리오 분석 중...\n(데이터 수집·AI 분석에 30초~1분 소요, 여유 있게 기다려 주세요.)")
                 
                 # 1. Fetch pre-market context (US wrap-up & KOSPI summary)
                 us_market_context = brave_client.search("간밤 미국 증시 마감 요약 주요 지수 특징주") if brave_client else "미국 증시 검색 불가"
@@ -618,14 +628,31 @@ def handle_command(chat_id, text):
             
         except json.JSONDecodeError:
             print(f"Failed to parse intent JSON: {intent_json}")
-            send_message(chat_id, f"❌ AI 서버 응답 오류:\n{intent_json}")
+            safe_msg = intent_json.replace("\u274c", "[X]")
+            send_message(chat_id, f"[오류] AI 서버 응답 오류:\n{safe_msg}")
         except Exception as e:
             print(f"Intent routing error: {e}")
-            send_message(chat_id, f"❌ 오류 발생: {e}")
+            # 이모지 사용 시 cp949 환경에서 재오류 가능하므로 일반 문자로 전송
+            send_message(chat_id, f"[오류] {e}")
 
 def run_bot():
     offset = 0
-    print(f"Bot polling started...")
+    # 토큰 설정 확인 (데스크탑에서 .env 누락 시 바로 확인 가능)
+    token_ok = TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_TOKEN.strip() != "" and TELEGRAM_BOT_TOKEN != "REPLACE_ME"
+    if not token_ok:
+        print("ERROR: TELEGRAM_BOT_TOKEN not set. Add TELEGRAM_BOT_TOKEN=... to .env in project root.")
+        print("Bot will not receive messages until .env is configured.")
+    else:
+        try:
+            r = requests.get(f"{TELEGRAM_API_URL}/getMe", timeout=10)
+            info = r.json()
+            if info.get("ok"):
+                print(f"Telegram bot connected: @{info['result'].get('username', '?')}")
+            else:
+                print(f"Telegram token invalid: {info}")
+        except Exception as e:
+            print(f"Telegram connection check failed: {e}")
+    print("Bot polling started...")
     
     while True:
         try:
@@ -685,8 +712,8 @@ def job_morning_report(is_open=False):
     for chat_id_str, position in subs.items():
         try:
             chat_id = int(chat_id_str)
-            title = "🌅 **[08:50] 장 시작 전 최종 점검 리포트**" if is_open else "🌃 **[06:00] 미국장 마감 요약 브리핑**"
-            send_message(chat_id, f"{title}\n\n📝 설정 포지션: `{position}`\n\nAI가 포지션 기반 데일리 전략을 즉시 분석합니다. (최대 1분 소요)")
+            title = "🌅 **[08:50] 장전 포지션 시나리오 전략 분석 보고서**" if is_open else "🌃 **[05:00] 야간 장 마무리 분석 리포트**"
+            send_message(chat_id, f"{title}\n\n📝 설정 포지션: `{position}`\n\nAI가 포지션 기반으로 분석합니다. (1~2분 소요, 잠시만 기다려 주세요.)")
             
             reply = advisor.get_portfolio_strategy(user_portfolio_text=position, market_context=market_context)
             send_message(chat_id, reply)
@@ -694,8 +721,8 @@ def job_morning_report(is_open=False):
             print(f"Error sending scheduled report to {chat_id_str}: {e}")
 
 def run_schedule():
-    # KST 기준
-    schedule.every().day.at("06:00").do(job_morning_report, is_open=False)
+    # KST 기준: 05:00 야간장 마감, 08:50 장전 시나리오
+    schedule.every().day.at("05:00").do(job_morning_report, is_open=False)
     schedule.every().day.at("08:50").do(job_morning_report, is_open=True)
     
     while True:
@@ -704,6 +731,22 @@ def run_schedule():
 
 # --- Main Entry ---
 if __name__ == "__main__":
+    # PID file for scripts\start_bot.bat / stop_bot.bat / status_bot.bat
+    _root = os.path.join(os.path.dirname(__file__), "..")
+    _pid_file = os.path.abspath(os.path.join(_root, "spk_bot.pid"))
+    try:
+        with open(_pid_file, "w") as f:
+            f.write(str(os.getpid()))
+    except Exception:
+        pass
+    def _remove_pid():
+        try:
+            if os.path.exists(_pid_file):
+                os.remove(_pid_file)
+        except Exception:
+            pass
+    atexit.register(_remove_pid)
+
     # Initialize Global Instances
     print("Initializing Xing API...")
     trader = XingRestTrader()

@@ -28,7 +28,7 @@ class BraveSearchClient:
                 # Extract and format the web results
                 results = data.get("web", {}).get("results", [])
                 if not results:
-                    return f"❌ '{query}'에 대한 검색 결과를 찾을 수 없습니다."
+                    return f"[오류] '{query}'에 대한 검색 결과를 찾을 수 없습니다."
 
                 summary_parts = []
                 for idx, res in enumerate(results[:count]):
@@ -50,4 +50,4 @@ class BraveSearchClient:
             else:
                 return f"⚠️ Brave Search API Error ({response.status_code}): {response.text}"
         except Exception as e:
-            return f"❌ 검색 중 오류 발생: {e}"
+            return f"[오류] 검색 중 오류 발생: {e}"

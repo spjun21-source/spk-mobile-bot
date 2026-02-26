@@ -20,9 +20,16 @@ if exist spk_bot.pid (
     )
 )
 
-:: Start in background (pythonw = no console window)
+:: Use venv Python if present (desktop may not have system Python path)
+set "PYEXE=pythonw.exe"
+if exist "venv\Scripts\pythonw.exe" set "PYEXE=venv\Scripts\pythonw.exe"
+
+:: Windows cp949 대신 UTF-8 사용 (이모지 오류 방지)
+set "PYTHONIOENCODING=utf-8"
+
+:: Start in background; log to spk_bot.log so we can see startup errors
 echo [*] Starting SPK Mobile Bot in background...
-start "" /B pythonw.exe -m src.main
+start "" /B cmd /c ""%PYEXE%" -m src.main >> spk_bot.log 2>&1"
 
 :: Wait a moment for PID file
 timeout /t 2 /nobreak >nul

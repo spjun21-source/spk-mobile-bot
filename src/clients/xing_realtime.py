@@ -158,7 +158,7 @@ class XingRealtimeClient:
             if rsp_cd == "0000" or rsp_cd.startswith("0"):
                 print(f"[Realtime] ✅ {tr_cd}/{tr_key}: {rsp_msg}")
             else:
-                print(f"[Realtime] ❌ {tr_cd}/{tr_key}: [{rsp_cd}] {rsp_msg}")
+                print(f"[Realtime] [X] {tr_cd}/{tr_key}: [{rsp_cd}] {rsp_msg}")
             return
 
         # Real-time data arrived — dispatch to callbacks

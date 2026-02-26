@@ -154,6 +154,15 @@ class GeminiAdvisor:
             else:
                 error_msg = result.get('error', {}).get('message', response.text)
                 status = result.get('error', {}).get('status', response.status_code)
-                return f"⚠️ **Gemini API Error**\n`{status}`: {error_msg}"
+                err_str = (error_msg or "") + str(result)
+                # 할당량 초과 시 사용자 친화 안내
+                if "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+                    return (
+                        "[안내] **Gemini API 일일/분당 한도**를 초과했습니다.\n\n"
+                        "잠시 후(1~2분) 다시 요청해 주세요. "
+                        "무료 한도는 분당 약 20회입니다.\n\n"
+                        "자세한 한도: https://ai.google.dev/gemini-api/docs/rate-limits"
+                    )
+                return f"[오류] **Gemini API**\n`{status}`: {error_msg}"
         except Exception as e:
-            return f"❌ AI Request Failed: {e}"
+            return f"[오류] AI Request Failed: {e}"

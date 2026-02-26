@@ -17,13 +17,17 @@ class XingRestTrader:
             with open(config_file, "r") as f:
                 self.config = json.load(f)
         except FileNotFoundError:
-            print(f"Config file '{config_file}' not found.")
-            sys.exit(1)
-            
+            print(f"Config file '{config_file}' not found. Xing API disabled (Telegram bot will still run).")
+            self.config = None
+            self.base_url = "https://openapi.ls-sec.co.kr:8080"
+            self.access_token = None
+            return
         self.base_url = self.config.get("base_url", "https://openapi.ls-sec.co.kr:8080")
         self.access_token = None
 
     def get_access_token(self):
+        if self.config is None:
+            return False
         url = f"{self.base_url}/oauth2/token"
         headers = {
             "Content-Type": "application/x-www-form-urlencoded"
