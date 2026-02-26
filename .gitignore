@@ -6,3 +6,5 @@ venv/
 *.pid
 config.json
 accounts.json
+config/subscribers.json
+.env.*

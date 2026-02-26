@@ -4,19 +4,43 @@ import json
 import time
 import sys
 import threading
+import schedule
+import os
 from src.clients.xing_rest import XingRestTrader
 from src.clients.gemini import GeminiAdvisor
 from src.clients.xing_realtime import XingRealtimeClient, parse_futures_execution, parse_futures_orderbook, TR_DESCRIPTIONS
 from src.clients.public_data import PublicDataClient
+from src.clients.brave_search import BraveSearchClient
+
+from dotenv import load_dotenv
 
 # --- Configuration ---
-TELEGRAM_BOT_TOKEN = "8495846438:AAGnfhzjLg9wTmxNkqBesQukMhEfwxZXjb0"
+load_dotenv() # Load variables from .env file
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "REPLACE_ME")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
-GEMINI_API_KEY = "AIzaSyDxqhHTnMuEhtNppo9aDtj8vg0GOzoO6hQ"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "REPLACE_ME")
+BRAVE_API_KEY = os.getenv("BRAVE_API_KEY", "")
 
 # --- Global Instances (set in __main__) ---
 realtime_client = None  # XingRealtimeClient instance
 public_data = None       # PublicDataClient instance
+brave_client = None      # BraveSearchClient instance
+advisor = None           # GeminiAdvisor instance
+
+# --- Subscriber Management ---
+SUBSCRIBERS_FILE = os.path.join(os.path.dirname(__file__), "..", "config", "subscribers.json")
+
+def load_subscribers():
+    if not os.path.exists(SUBSCRIBERS_FILE):
+        return {}
+    with open(SUBSCRIBERS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_subscribers(subs):
+    os.makedirs(os.path.dirname(SUBSCRIBERS_FILE), exist_ok=True)
+    with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(subs, f, ensure_ascii=False, indent=4)
 
 # --- Futures Name Cache ---
 futures_name_cache = {}  # code -> name mapping
@@ -54,13 +78,25 @@ def lookup_name(code):
     return stock_names.get(code, code)
 
 # --- Operations ---
-def send_message(chat_id, text):
+def send_message(chat_id, text, parse_mode="Markdown"):
     try:
         url = f"{TELEGRAM_API_URL}/sendMessage"
-        payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
-        requests.post(url, json=payload, timeout=10)
+        payload = {"chat_id": chat_id, "text": text}
+        if parse_mode:
+            payload["parse_mode"] = parse_mode
+            
+        res = requests.post(url, json=payload, timeout=15)
+        data = res.json()
+        
+        if not data.get("ok"):
+            print(f"⚠️ Telegram API Error: {data.get('description')}")
+            # If Markdown parsing failed, try again without markdown
+            if parse_mode is not None and "parse" in data.get("description", "").lower():
+                print("🔄 Retrying without Markdown format...")
+                send_message(chat_id, text, parse_mode=None)
+                
     except Exception as e:
-        print(f"Error sending message: {e}")
+        print(f"❌ Error sending message: {e}")
 
 def get_price_data(code):
     """
@@ -163,7 +199,29 @@ def handle_command(chat_id, text):
     
     print(f"Processing command: {cmd}")
 
-    if cmd in ["/start", "hello", "hi"]:
+    if cmd == "/subscribe":
+        position = text.replace("/subscribe", "").strip()
+        if not position:
+            send_message(chat_id, "💡 사용법: `/subscribe [나의 포지션]`\n예시: `/subscribe 코스피 선물 1계약 매수`\n매일 아침 06:00, 08:50에 맞춤형 장전 시나리오를 자동으로 보내드립니다.")
+            return
+            
+        subs = load_subscribers()
+        subs[str(chat_id)] = position
+        save_subscribers(subs)
+        send_message(chat_id, f"✅ **구독 완료!**\n저장된 포지션: `{position}`\n앞으로 장 시작 전 시나리오 리포트를 자동으로 보내드립니다.")
+        return
+        
+    elif cmd == "/unsubscribe":
+        subs = load_subscribers()
+        if str(chat_id) in subs:
+            del subs[str(chat_id)]
+            save_subscribers(subs)
+            send_message(chat_id, "❌ **구독 취소 완료**\n더 이상 아침 리포트를 보내지 않습니다.")
+        else:
+            send_message(chat_id, "현재 구독 중이 아닙니다.")
+        return
+
+    elif cmd in ["/start", "hello", "hi"]:
         msg = (
             "🤖 **SPK Mobile Bot (Gemini AI)**\n"
             "Status: **Online**\n\n"
@@ -479,70 +537,91 @@ def handle_command(chat_id, text):
             send_message(chat_id, "🔴 Realtime client not initialized.")
 
     else:
-        # Natural Language Handling (Chat Mode)
-        # 1. Identify Intent/Asset
-        text_lower = text.lower()
-        code_to_check = None
+        # Natural Language Handling (Conversational Intent Routing)
+        send_message(chat_id, "🧠 분석 중입니다...")
         
-        # Key-Value Mapper for Convenience
-        asset_map = {
-            # Stocks
-            "samsung": "005930",
-            "삼성전자": "005930",
-            "삼성": "005930",
-            "sk": "000660",
-            "hynix": "000660",
-            "하이닉스": "000660",
-            "에스케이": "000660",
-            "naver": "035420",
-            "네이버": "035420",
-            "카카오": "035720",
-            "현대차": "005380",
-            "현대자동차": "005380",
-            # Samsung Futures (with and without space)
-            "삼성 선물": "A1163000",
-            "삼성선물": "A1163000",
-            "samsung future": "A1163000",
-            # KOSPI 200 Futures (with and without space)
-            "kospi200": "101V6000",
-            "kospi 200": "101V6000",
-            "코스피200": "101V6000",
-            "코스피 선물": "101V6000",
-            "코스피선물": "101V6000",
-            "지수 선물": "101V6000",
-            "지수선물": "101V6000",
-            "index future": "101V6000",
-            "선물 가격": "101V6000",
-            "선물": "101V6000",
-            # Generic - default to Samsung stock
-            "kospi": "005930",
-            "코스피": "005930",
-        }
-        
-        # Check map (longest key first to avoid partial matches)
-        for key in sorted(asset_map.keys(), key=len, reverse=True):
-            if key in text_lower:
-                code_to_check = asset_map[key]
-                break
-        
-        # Check explicit codes (simple regex-like check)
-        if not code_to_check:
-            for word in parts:
-                if (word.startswith("A") or word.startswith("00") or word.startswith("101")) and len(word) >= 6:
-                    code_to_check = word
-                    break
-        
-        # 2. Fetch Data (if we found a code)
-        market_data = None
-        if code_to_check:
-             market_data = get_price_data(code_to_check)
-             send_message(chat_id, f"🧠 Thinking about `{code_to_check}`...")
-        else:
-             send_message(chat_id, "🧠 Thinking...")
+        try:
+            # 1. Analyze Intent
+            intent_json = advisor.analyze_intent(text)
+            
+            # If the API returned an error string instead of JSON, forward it
+            if intent_json.startswith("⚠️") or intent_json.startswith("❌"):
+                send_message(chat_id, intent_json)
+                return
+                
+            intent = json.loads(intent_json)
+            
+            action = intent.get("action", "chat")
+            target_code = intent.get("target_code", "")
+            
+            print(f"Parsed Intent: Action={action}, Code={target_code}")
+            
+            # 2. Route Action
+            if action == "price":
+                if target_code:
+                    data = get_price_data(target_code)
+                    if data:
+                        name = lookup_name(target_code)
+                        data['asset_name'] = name # Inject for Gemini to use
+                        reply = advisor.format_response(text, data, data_type="price")
+                    else:
+                        reply = f"❌ `{target_code}`에 대한 가격 데이터를 찾을 수 없어요."
+                else:
+                    reply = "어떤 종목의 가격을 원하시는지 말씀해 주세요! (예: 삼성전자 가격 알려줘)"
+            
+            elif action == "market":
+                summary = public_data.get_market_summary()
+                reply = advisor.format_response(text, summary, data_type="market summary")
+                
+            elif action == "futures":
+                data = public_data.get_kospi200_futures()
+                reply = advisor.format_response(text, data, data_type="futures list")
+                
+            elif action == "options":
+                data = public_data.get_kospi200_options()
+                reply = advisor.format_response(text, data, data_type="options list")
+                
+            elif action == "web_search":
+                if target_code:
+                    send_message(chat_id, f"🌐 인터넷 검색 중: `{target_code}`...")
+                    search_results = brave_client.search(target_code)
+                    reply = advisor.format_response(text, search_results, data_type="web search results")
+                else:
+                    reply = "무엇을 검색해 드릴까요? (예: 미국 나스닥 상황 알려줘)"
 
-        # 3. Call Gemini Chat
-        response = advisor.get_chat_response(text, market_data, symbol=code_to_check if code_to_check else "General")
-        send_message(chat_id, response)
+            elif action == "portfolio_strategy":
+                send_message(chat_id, "📊 보유 포지션 기반 프리마켓 시나리오 분석 중...\n(미국/한국 시장 데이터 수집 및 분석에 10~15초 소요)")
+                
+                # 1. Fetch pre-market context (US wrap-up & KOSPI summary)
+                us_market_context = brave_client.search("간밤 미국 증시 마감 요약 주요 지수 특징주") if brave_client else "미국 증시 검색 불가"
+                
+                try:
+                    kr_summary = public_data.get_market_summary()
+                    kr_market_context = PublicDataClient.format_market_summary(kr_summary)
+                except Exception as e:
+                    kr_market_context = f"한국 시장 요약 가져오기 실패: {e}"
+                
+                # Format contexts into a single string for Gemini
+                market_context = f"[미국 증시 동향]\n{us_market_context}\n\n[국내 파생/현물 기초 데이터]\n{kr_market_context}"
+                
+                # 2. Call Gemini for strategy 
+                reply = advisor.get_portfolio_strategy(user_portfolio_text=text, market_context=market_context)
+                
+            else: # chat or unknown
+                market_data = None
+                if target_code:
+                     market_data = get_price_data(target_code)
+                reply = advisor.get_chat_response(text, market_data, symbol=target_code if target_code else "General")
+            
+            # 3. Send final conversational reply
+            send_message(chat_id, reply)
+            
+        except json.JSONDecodeError:
+            print(f"Failed to parse intent JSON: {intent_json}")
+            send_message(chat_id, f"❌ AI 서버 응답 오류:\n{intent_json}")
+        except Exception as e:
+            print(f"Intent routing error: {e}")
+            send_message(chat_id, f"❌ 오류 발생: {e}")
 
 def run_bot():
     offset = 0
@@ -581,6 +660,48 @@ def run_bot():
             print(f"Polling Error: {e}")
             time.sleep(5)
 
+# --- Scheduler ---
+def job_morning_report(is_open=False):
+    print(f"⏰ Running Scheduled Report (is_open={is_open})...")
+    subs = load_subscribers()
+    if not subs: 
+        print("No subscribers found.")
+        return
+    
+    # 1. Fetch Market Context
+    us_context = brave_client.search("간밤 미국 증시 마감 요약 주요 지수 특징주") if brave_client else "미국 증시 정보 없음"
+    
+    kr_context = "아직 개장 전 사전 데이터가 충분하지 않습니다."
+    if is_open:
+        try:
+            kr_summary = public_data.get_market_summary()
+            kr_context = PublicDataClient.format_market_summary(kr_summary)
+        except Exception as e:
+            kr_context = f"한국 프리마켓 요약 실패: {e}"
+            
+    market_context = f"[미국 증시 동향]\n{us_context}\n\n[국내장 기초 데이터]\n{kr_context}"
+    
+    # 2. Iterate and send
+    for chat_id_str, position in subs.items():
+        try:
+            chat_id = int(chat_id_str)
+            title = "🌅 **[08:50] 장 시작 전 최종 점검 리포트**" if is_open else "🌃 **[06:00] 미국장 마감 요약 브리핑**"
+            send_message(chat_id, f"{title}\n\n📝 설정 포지션: `{position}`\n\nAI가 포지션 기반 데일리 전략을 즉시 분석합니다. (최대 1분 소요)")
+            
+            reply = advisor.get_portfolio_strategy(user_portfolio_text=position, market_context=market_context)
+            send_message(chat_id, reply)
+        except Exception as e:
+            print(f"Error sending scheduled report to {chat_id_str}: {e}")
+
+def run_schedule():
+    # KST 기준
+    schedule.every().day.at("06:00").do(job_morning_report, is_open=False)
+    schedule.every().day.at("08:50").do(job_morning_report, is_open=True)
+    
+    while True:
+        schedule.run_pending()
+        time.sleep(30)
+
 # --- Main Entry ---
 if __name__ == "__main__":
     # Initialize Global Instances
@@ -594,6 +715,9 @@ if __name__ == "__main__":
 
     print("Initializing Public Data Client...")
     public_data = PublicDataClient()
+
+    print("Initializing Brave Search Client...")
+    brave_client = BraveSearchClient(api_key=BRAVE_API_KEY)
 
     print("Initializing Gemini Advisor...")
     advisor = GeminiAdvisor(GEMINI_API_KEY)
@@ -609,5 +733,9 @@ if __name__ == "__main__":
     # Start Alert Thread
     print("Starting Alert Monitor...")
     threading.Thread(target=check_alerts, daemon=True).start()
+    
+    # Start Scheduler Thread
+    print("Starting Automated Reporting Scheduler...")
+    threading.Thread(target=run_schedule, daemon=True).start()
     
     run_bot()
