@@ -20,6 +20,9 @@ class BraveSearchClient:
             "count": count  # Keep it small for Gemini context
         }
 
+        if not self.api_key:
+            return "[안내] 인터넷 검색 기능이 비활성화 되어 있습니다. (API 키 필요)"
+
         try:
             response = requests.get(self.base_url, headers=headers, params=params, timeout=10)
             if response.status_code == 200:

@@ -8,3 +8,8 @@ config.json
 accounts.json
 config/subscribers.json
 .env.*
+config/xing_config.json
+*config.json
+mock_portfolio.json
+node_modules/
+

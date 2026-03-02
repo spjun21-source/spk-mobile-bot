@@ -1,0 +1,54 @@
+{
+    "accounts": {
+        "futures": {
+            "label": "KOSPI 선물옵션 실거래",
+            "accountNo": "YOUR_FUTURES_ACCOUNT_NO",
+            "appkey": "YOUR_FUTURES_APP_KEY",
+            "appsecret": "YOUR_FUTURES_APP_SECRET"
+        },
+        "stock": {
+            "label": "종합주식 실거래",
+            "accountNo": "YOUR_STOCK_ACCOUNT_NO",
+            "appkey": "YOUR_STOCK_APP_KEY",
+            "appsecret": "YOUR_STOCK_APP_SECRET"
+        }
+    },
+    "mock_accounts": {
+        "futures": {
+            "label": "KOSPI 선물옵션 모의투자",
+            "accountNo": "YOUR_MOCK_FUTURES_ACCOUNT_NO",
+            "appkey": "YOUR_MOCK_FUTURES_APP_KEY",
+            "appsecret": "YOUR_MOCK_FUTURES_APP_SECRET"
+        },
+        "stock": {
+            "label": "종합주식 모의투자",
+            "accountNo": "YOUR_MOCK_STOCK_ACCOUNT_NO",
+            "appkey": "YOUR_MOCK_STOCK_APP_KEY",
+            "appsecret": "YOUR_MOCK_STOCK_APP_SECRET"
+        }
+    },
+    "mode": "mock",
+    "endpoints": {
+        "tokenUrl": "https://openapi.ls-sec.co.kr:8080/oauth2/token",
+        "wsUrl": "wss://openapi.ls-sec.co.kr:9443/websocket",
+        "wsUrlMock": "wss://openapi.ls-sec.co.kr:29443/websocket"
+    },
+    "subscriptions": [
+        {
+            "tr": "FCD",
+            "desc": "KOSPI200 선물체결"
+        },
+        {
+            "tr": "FH0",
+            "desc": "KOSPI200 선물호가"
+        },
+        {
+            "tr": "OCD",
+            "desc": "KOSPI200 옵션체결"
+        },
+        {
+            "tr": "OH0",
+            "desc": "KOSPI200 옵션호가"
+        }
+    ]
+}

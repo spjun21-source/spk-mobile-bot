@@ -9,12 +9,12 @@ class XingRestTrader:
         # Resolve path relative to the scratch directory (where config is located)
         if not os.path.isabs(config_file):
              # __file__ is in spk-mobile-bot/src/clients/
-             # root is spk-mobile-bot's parent (scratch/)
-             root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-             config_file = os.path.join(root_dir, config_file)
+             # root is spk-mobile-bot/ (two levels up)
+             root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+             config_file = os.path.join(root_dir, "config", config_file)
              
         try:
-            with open(config_file, "r") as f:
+            with open(config_file, "r", encoding="utf-8-sig") as f:
                 self.config = json.load(f)
         except FileNotFoundError:
             print(f"Config file '{config_file}' not found. Xing API disabled (Telegram bot will still run).")

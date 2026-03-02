@@ -1,0 +1,9 @@
+{
+  "name": "openclaw-market-monitor",
+  "version": "1.1.0",
+  "description": "LS Securities Corebot Market Monitor and Mock Trading Tool",
+  "type": "module",
+  "dependencies": {
+    "ws": "^8.19.0"
+  }
+}

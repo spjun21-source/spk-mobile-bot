@@ -5,8 +5,12 @@ import json
 class GeminiAdvisor:
     def __init__(self, api_key):
         self.api_key = api_key
-        # Using gemini-2.5-flash because the user's key has quota enabled for it.
-        self.url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.api_key}"
+        # Using gemini-flash-latest because it has standard Free Tier quotas (1,500 RPD).
+        self.url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={self.api_key}"
+        
+        # Cache for recent identical intents to save API quota
+        self._intent_cache = {}
+        self._analysis_cache = {}
 
     def get_analysis(self, market_data, symbol="Unknown"):
         """
@@ -63,7 +67,7 @@ class GeminiAdvisor:
         Extract the user's intent from the following text: "{user_text}"
         
         Rules:
-        1. Action MUST be one of: "price", "market", "futures", "options", "web_search", "portfolio_strategy", "chat".
+        1. Action MUST be one of: "price", "market", "futures", "options", "web_search", "portfolio_strategy", "chat", "stock_analysis", "weekly_strategy".
         2. Target code MUST be a 6-to-8 character code like "005930" (Samsung) or "101V6000" (KOSPI 200). 
            - Map "삼성전자", "삼성", "samsung" to "005930"
            - Map "에스케이", "sk하이닉스", "hynix" to "000660"
@@ -73,25 +77,46 @@ class GeminiAdvisor:
            - For "web_search" actions, "target_code" should be the actual search keyword (e.g., "나스닥", "테슬라 주가").
            - If no specific code is mentioned, use "" (empty string).
         3. Intents:
-           - Asking for a KOREAN company's price/chart -> "price"
+           - Asking for a KOREAN company's current price/simple quote -> "price"
+           - Asking for a deep analysis, historical trends, or future predictions of a specific stock -> "stock_analysis"
            - Asking for a general KOREAN market summary/overview -> "market"
            - Asking for KOSPI futures prices without specific code -> "futures"
            - Asking for KOSPI options prices -> "options"
-           - Asking for US/Global markets, Crypto, specific News, or any general knowledge that isn't KOSPI -> "web_search"
+           - Asking for US/Global markets, Crypto, specific News -> "web_search"
            - Providing a portfolio (e.g., holding 1 futures, 4 options) and asking for a pre-market strategy/scenario -> "portfolio_strategy"
+           - Asking for a comprehensive WEEKLY analysis, weekend market summary, or specifically asking about KOSPI 200 + Weekly Options strategy -> "weekly_strategy"
            - Greetings, general internal bot questions -> "chat"
         
         Respond ONLY with a valid JSON object. No markdown formatting, no backticks.
         Example 1: {{"action": "price", "target_code": "005930"}}
-        Example 2: {{"action": "web_search", "target_code": "테슬라 애플 주가"}}
-        Example 3: {{"action": "portfolio_strategy", "target_code": ""}}
+        Example 2: {{"action": "stock_analysis", "target_code": "005930"}}
+        Example 3: {{"action": "web_search", "target_code": "테슬라 애플 주가"}}
+        Example 4: {{"action": "portfolio_strategy", "target_code": ""}}
+        Example 5: {{"action": "weekly_strategy", "target_code": ""}}
+        Example 6: {{"action": "chat", "target_code": ""}}
         """
         
+        import time
+        
+        # Check cache first
+        # Very simple cache eviction (keep last 50 items)
+        if len(self._intent_cache) > 50:
+            self._intent_cache.clear()
+            
+        if user_text in self._intent_cache:
+            cache_time, cached_result = self._intent_cache[user_text]
+            if time.time() - cache_time < 300: # Cache for 5 minutes
+                return cached_result
+
         # We need to ensure we only get JSON back
         response_text = self._generate(prompt)
         
         # Clean up potential markdown formatting like ```json ... ```
         clean_text = response_text.replace("```json", "").replace("```", "").strip()
+        
+        if clean_text.startswith("{"):
+            self._intent_cache[user_text] = (time.time(), clean_text)
+            
         return clean_text
 
     def format_response(self, user_text, raw_data, data_type="price"):
@@ -136,33 +161,49 @@ class GeminiAdvisor:
         """
         return self._generate(prompt)
 
-    def _generate(self, prompt):
+    def _generate(self, prompt, retries=2):
+        import time
         payload = {
             "contents": [{
                 "parts": [{"text": prompt}]
             }]
         }
 
-        try:
-            response = requests.post(self.url, json=payload, headers={"Content-Type": "application/json"}, timeout=60)
-            result = response.json()
-            if response.status_code == 200:
-                if 'candidates' in result and result['candidates']:
-                     return result['candidates'][0]['content']['parts'][0]['text']
+        import time
+        for attempt in range(retries + 1):
+            try:
+                response = requests.post(self.url, json=payload, headers={"Content-Type": "application/json"}, timeout=60)
+                result = response.json()
+                if response.status_code == 200:
+                    if 'candidates' in result and result['candidates']:
+                         return result['candidates'][0]['content']['parts'][0]['text']
+                    else:
+                         return "AI returned no content."
                 else:
-                     return "AI returned no content."
-            else:
-                error_msg = result.get('error', {}).get('message', response.text)
-                status = result.get('error', {}).get('status', response.status_code)
-                err_str = (error_msg or "") + str(result)
-                # 할당량 초과 시 사용자 친화 안내
-                if "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
-                    return (
-                        "[안내] **Gemini API 일일/분당 한도**를 초과했습니다.\n\n"
-                        "잠시 후(1~2분) 다시 요청해 주세요. "
-                        "무료 한도는 분당 약 20회입니다.\n\n"
-                        "자세한 한도: https://ai.google.dev/gemini-api/docs/rate-limits"
-                    )
-                return f"[오류] **Gemini API**\n`{status}`: {error_msg}"
-        except Exception as e:
-            return f"[오류] AI Request Failed: {e}"
+                    error_msg = result.get('error', {}).get('message', response.text)
+                    status = result.get('error', {}).get('status', response.status_code)
+                    err_str = (error_msg or "") + str(result)
+                    
+                    # 할당량 초과 시 자동 재시도 로직
+                    if "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower() or status == 429:
+                        print(f"RATE LIMIT WARN: {err_str}")
+                        if attempt == 0:
+                            print(f"[Gemini API] 429 Rate limit hit. Waiting 65s to clear 1-minute window...")
+                            time.sleep(65)
+                            continue
+                        elif attempt == 1:
+                            print(f"[Gemini API] 429 Rate limit hit again. Waiting 10s...")
+                            time.sleep(10)
+                            continue
+                        else:
+                            return (
+                                "[안내] **Gemini AI 모델 속도 제한(Rate Limit)**에 도달했습니다.\n\n"
+                                "짧은 시간에 많은 분석을 요청하여 구글 서버가 일시적으로 차단했습니다.\n"
+                                "잠시 후(약 1분) 다시 시도해 주세요. (무료 서버 한도: 분당 15요청)"
+                            )
+                    return f"[오류] **Gemini API**\n`{status}`: {error_msg}"
+            except Exception as e:
+                if attempt < retries:
+                    time.sleep(5)
+                    continue
+                return f"[오류] AI Request Failed: {e}"

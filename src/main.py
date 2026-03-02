@@ -579,6 +579,28 @@ def handle_command(chat_id, text):
                 else:
                     reply = "어떤 종목의 가격을 원하시는지 말씀해 주세요! (예: 삼성전자 가격 알려줘)"
             
+            elif action == "stock_analysis":
+                if target_code:
+                    name = lookup_name(target_code)
+                    send_message(chat_id, f"📊 **{name}**(`{target_code}`) 최근 동향 및 추세 분석 중입니다...\n(인터넷 뉴스 검색이 포함되어 잠시 소요됩니다.)")
+                    
+                    price_data = get_price_data(target_code)
+                    if price_data:
+                        price_data['asset_name'] = name
+                    else:
+                        price_data = {"error": f"No real-time data for {name}"}
+
+                    search_query = f"{name} 주식 주가 시세 장기 전망 분석"
+                    search_results = brave_client.search(search_query) if brave_client else "인터넷 검색 모듈 비활성화"
+                    
+                    combined_data = {
+                        "current_price_data": price_data,
+                        "recent_news_and_external_analysis": search_results
+                    }
+                    reply = advisor.format_response(text, combined_data, data_type="stock comprehensive analysis and prediction")
+                else:
+                    reply = "어떤 종목을 분석해 드릴까요? (예: 지난 주 삼성전자 주가 분석해줘)"
+            
             elif action == "market":
                 summary = public_data.get_market_summary()
                 reply = advisor.format_response(text, summary, data_type="market summary")
@@ -616,6 +638,25 @@ def handle_command(chat_id, text):
                 
                 # 2. Call Gemini for strategy 
                 reply = advisor.get_portfolio_strategy(user_portfolio_text=text, market_context=market_context)
+                
+            elif action == "weekly_strategy":
+                send_message(chat_id, "📊 주말 글로벌/국내 시황 및 다음 주 KOSPI200/위클리 옵션 전략을 분석 중입니다...\n(데이터 수집·AI 분석에 약 1분 소요됩니다.)")
+                
+                # 1. Fetch US weekend wrap-up
+                us_market_context = brave_client.search("미국 나스닥 증시 주간 마감 요약 KOSPI 주간 전망") if brave_client else "미국 증시 검색 불가"
+                
+                # 2. Fetch KR current snapshot
+                try:
+                    kr_summary = public_data.get_market_summary()
+                    kr_market_context = PublicDataClient.format_market_summary(kr_summary)
+                except Exception as e:
+                    kr_market_context = f"한국 시장 요약 데이터 실패: {e}"
+
+                market_context = f"[미국 및 글로벌 증시 주간 동향]\n{us_market_context}\n\n[국내 KOSPI200/옵션 기초 상황]\n{kr_market_context}"
+                
+                # 3. Request portfolio strategy using the pre-defined target scenario
+                scenario_prompt = "KOSPI200 선물 1계약 양방향 타점, 위클리 옵션 콜 2계약 및 풋 2계약 (양매수/양매도) 대응 전략"
+                reply = advisor.get_portfolio_strategy(user_portfolio_text=scenario_prompt, market_context=market_context)
                 
             else: # chat or unknown
                 market_data = None
