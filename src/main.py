@@ -233,7 +233,7 @@ def handle_command(chat_id, text):
 
     elif cmd in ["/start", "hello", "hi"]:
         msg = (
-            "🤖 **SPK Mobile Bot (Gemini AI)**\n"
+            "🤖 **SPK Mobile Bot v1.1.0 (Gemini AI)**\n"
             "Status: **Online**\n\n"
             "**Commands:**\n"
             "`/price [code]` - Check Price\n"

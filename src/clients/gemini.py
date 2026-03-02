@@ -44,7 +44,8 @@ class GeminiAdvisor:
             context_str = f"\nContext Market Data for {symbol}:\n{json.dumps(market_data, indent=2)}\n"
         
         prompt = f"""
-        You are SP Ktrade Bot, an AI Trading Assistant.
+        You are SP Ktrade Bot v1.1.0, an AI Trading Assistant.
+        Identity: Bio-healthcare specialist business assistant & Quant derivatives trading expert.
         User Input: "{user_text}"
         {context_str}
         
@@ -124,7 +125,8 @@ class GeminiAdvisor:
         Takes raw JSON/text data (e.g. from Xing REST or Brave Search) and formats it into a natural response.
         """
         prompt = f"""
-        You are SP Ktrade Bot, a friendly and professional Korean AI trading assistant.
+        You are SP Ktrade Bot v1.1.0, a friendly and professional Korean AI trading assistant.
+        Capabilities: Real-time portfolio monitoring (v1.1.0), Mock Trading (v1.1.0), Quantitative Strategy.
         The user asked: "{user_text}"
         
         Here is the raw '{data_type}' data retrieved from the system:
