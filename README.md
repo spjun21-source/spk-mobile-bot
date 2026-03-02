@@ -5,22 +5,31 @@ A Telegram-based trading and market analysis bot integrating the LS Securities (
 ## Directory Structure
 - `src/main.py`: The entry point for the background bot service.
 - `src/clients/`: API client wrappers (Xing REST, Xing Realtime, Public Data, Gemini).
-- `scripts/`: Windows batch scripts to start, stop, and check the bot's status locally.
+- `skills/market-monitor/`: [v1.1.0] LS Securities real-time WebSocket adapter and Portfolio Simulation tools.
+- `scripts/`: Windows batch and PowerShell scripts to manage the bot and tools.
 - `requirements.txt`: Python dependencies.
 
 ## Setup Instructions
 
 1. **Install Requirements**
-   Ensure you have Python installed, then install the dependencies:
+   Ensure you have Python and Node.js installed.
    ```bash
    pip install -r requirements.txt
+   cd skills/market-monitor && npm install
    ```
 
-2. **Configuration**
-   The bot expects `xing_config.json` and `accounts.json` in the root or parent directories (these are currently excluded via `.gitignore` for security). The Telegram and Gemini API keys are currently configured within `src/main.py`.
+2. **Configuration (Remote Work SYNC)**
+   - The `.gitignore` prevents sensitive `ls_config.json` and `xing_config.json` from being leaked.
+   - For remote work, copy your `ls_config.json` manually into `skills/market-monitor/scripts/`.
 
-## Running the Bot locally
-Use the provided batch scripts in the `scripts/` folder:
-- To start the bot in the background: Run `scripts\start_bot.bat`
-- To stop the background process: Run `scripts\stop_bot.bat`
-- To check if the bot is running: Run `scripts\status_bot.bat`
+## Running the Bot & Tools
+
+### Main Bot
+Use the provided scripts in the `scripts/` folder:
+- `scripts\start_bot.bat`: Start the background service.
+
+### Market Monitor v1.1.0 (LS WebSocket)
+- `node skills/market-monitor/scripts/ls_websocket_adapter.js connect`: Start the real-time daemon.
+- `node skills/market-monitor/scripts/portfolio_monitor.js`: View your real-time PnL.
+- `node skills/market-monitor/scripts/mock_trade_executor.js`: Execute simulated trades.
+
