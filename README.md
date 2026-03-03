@@ -5,7 +5,7 @@ A Telegram-based trading and market analysis bot integrating the LS Securities (
 ## Directory Structure
 - `src/main.py`: The entry point for the background bot service.
 - `src/clients/`: API client wrappers (Xing REST, Xing Realtime, Public Data, Gemini).
-- `skills/market-monitor/`: [v1.1.0] LS Securities real-time WebSocket adapter and Portfolio Simulation tools.
+- `skills/market-monitor/`: [v1.2.1] LS Securities real-time WebSocket adapter and Portfolio Simulation tools.
 - `scripts/`: Windows batch and PowerShell scripts to manage the bot and tools.
 - `requirements.txt`: Python dependencies.
 

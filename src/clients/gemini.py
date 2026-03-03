@@ -45,7 +45,7 @@ class GeminiAdvisor:
             context_str = f"\nContext Market Data for {symbol}:\n{json.dumps(market_data, indent=2)}\n"
         
         prompt = f"""
-        You are SP Ktrade Bot v1.1.0, an AI Trading Assistant.
+        You are SP Ktrade Bot v1.2.1, an AI Trading Assistant.
         Identity: Bio-healthcare specialist business assistant & Quant derivatives trading expert.
         User Input: "{user_text}"
         {context_str}
@@ -126,8 +126,8 @@ class GeminiAdvisor:
         Takes raw JSON/text data (e.g. from Xing REST or Brave Search) and formats it into a natural response.
         """
         prompt = f"""
-        You are SP Ktrade Bot v1.1.0, a friendly and professional Korean AI trading assistant.
-        Capabilities: Real-time portfolio monitoring (v1.1.0), Mock Trading (v1.1.0), Quantitative Strategy.
+        You are SP Ktrade Bot v1.2.1, a friendly and professional Korean AI trading assistant.
+        Capabilities: Real-time portfolio monitoring (v1.2.1), Mock Trading (v1.2.1), Quantitative Strategy.
         The user asked: "{user_text}"
         
         Here is the raw '{data_type}' data retrieved from the system:
@@ -143,23 +143,37 @@ class GeminiAdvisor:
         """
         Generates a pre-market scenario and trading strategy based on the user's current holdings
         and broader market context (US indices, KOSPI summary).
+        Upgraded to v1.2.1 Strategic Master format.
         """
         prompt = f"""
-        You are an elite quantitative analyst and derivatives trader advising a client in South Korea before the KOSPI market opens.
+        You are SP Ktrade Bot v1.2.1, an elite "Strategic Master" quantitative analyst advising a client in South Korea.
         
         The client has provided their current portfolio/position:
         "{user_portfolio_text}"
         
-        Here is the overnight / pre-market context (US markets & KOSPI baseline):
+        Market Context (US & KOSPI baseline):
         {market_context}
         
-        Your task:
-        1. **Market Diagnosis**: Briefly summarize the overnight US market trend and how it might impact the KOSPI open (Gap up / Gap down / Mixed).
-        2. **Current Portfolio Evaluation**: Evaluate the user's specific positions using the provided context. If "[실시간 시장가 데이터]" is present, use those actual prices to calculate exact losses/gains.
-        3. **Rebalancing Strategy**: Provide a concrete rebalancing plan. For losing positions, suggest specific "Pain Points" (stop loss) and "Averaging Down" levels based on the market bias.
-        4. **Tactical Scenarios (A/B)**: Define clear "If X, then do Y" steps for the market open.
+        Format your response exactly as follows (v1.2.1 Strategic Master Style):
         
-        Write the response in professional, structured, conversational Korean. Use bullet points and bold text for readability.
+        **[코어봇 (CoreBot) v1.2.1 - Strategic Operations Report]**
+        
+        📡 __[Market Monitor & Signal Watchdog]__
+        • **Target**: KOSPI 200 / Weekly Options
+        • **Market Status**: [Analysis based on market_context]
+        • **Watchdog Signal**: [Identify if current direction is BUY/SELL/NEUTRAL]
+        • **Strategic Forecast**: [Concise 1-sentence prediction]
+        
+        📝 __[Strategy & Portfolio Diagnosis]__
+        • **Analysis**: Evaluate the user's "{user_portfolio_text}" against the current market.
+        • **Pain Points**: Identify critical stop-loss or risk levels.
+        - [Specific bullet points for Call/Put/Futures]
+        
+        🎯 __[Tactical Scenarios (A/B)]__
+        • **Scenario A (Bull/Bear continuation)**: "If [Level] breaks, then [Action]"
+        • **Scenario B (Reversal/Sideways)**: "If [Level] holds, then [Action]"
+        
+        Write in professional, conversational Korean. Use bold text and bullet points for readability.
         """
         return self._generate(prompt)
 
@@ -174,43 +188,56 @@ class GeminiAdvisor:
         for attempt in range(retries):
             try:
                 response = requests.post(self.url, json=payload, headers={"Content-Type": "application/json"}, timeout=60)
-                result = response.json()
                 
+                # Try to parse JSON, handle potential parse errors
+                try:
+                    result = response.json()
+                except Exception as je:
+                    print(f"JSON Parse Error: {je}")
+                    result = {"error": {"message": response.text}}
+
                 if response.status_code == 200:
                     if 'candidates' in result and result['candidates']:
                          return result['candidates'][0]['content']['parts'][0]['text']
                     else:
                          return "AI returned no content."
                 
-                elif response.status_code == 429:
-                    # RESOURCE_EXHAUSTED / Quota exceeded
-                    error_msg = result.get('error', {}).get('message', "")
-                    if "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
-                        print(f"RATE LIMIT WARN (429): {error_msg}")
-                        if attempt == 0:
-                            print(f"[Gemini API] 429 Rate limit hit. Waiting 65s to clear 1-minute window...")
-                            time.sleep(65)
-                            continue
-                        elif attempt < retries - 1:
-                            wait_time = (attempt + 1) * 5
-                            print(f"[Gemini API] 429 Rate limit hit again. Waiting {wait_time}s...")
-                            time.sleep(wait_time)
-                            continue
-                        else:
-                            return (
-                                "[안내] **Gemini AI 모델 속도 제한(Rate Limit)**에 도달했습니다.\n\n"
-                                "짧은 시간에 많은 분석을 요청하여 구글 서버가 일시적으로 차단했습니다.\n"
-                                "잠시 후(약 1분) 다시 시도해 주세요. (무료 서버 한도: 분당 15요청)"
-                            )
+                # Check for 429, 503, or specific error strings
+                error_msg = result.get('error', {}).get('message', "")
+                status_code = result.get('error', {}).get('status', str(response.status_code))
+                
+                is_transient_error = (
+                    response.status_code in [429, 503] or 
+                    "RESOURCE_EXHAUSTED" in error_msg or 
+                    "quota" in error_msg.lower() or
+                    "RESOURCE_EXHAUSTED" in status_code or
+                    "UNAVAILABLE" in error_msg or
+                    "high demand" in error_msg.lower() or
+                    "UNAVAILABLE" in status_code
+                )
+                
+                if is_transient_error:
+                    # Exponential Backoff: 70s, 140s... (Google Free Tier is per minute)
+                    wait_time = 70 * (attempt + 1)
+                    print(f"RATE LIMIT HIT: {error_msg}. Wait {wait_time}s (Attempt {attempt+1}/{retries})")
+                    
+                    if attempt < retries - 1:
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        return (
+                            "[안내] **Gemini AI 모델 할당량 초과(Quota Exceeded)**\n\n"
+                            "구글 무료 API 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.\n"
+                            "(한도: 분당 약 15회 / 일일 1,500회)"
+                        )
                 
                 else:
-                    error_msg = result.get('error', {}).get('message', response.text)
-                    status = result.get('error', {}).get('status', response.status_code)
-                    return f"[오류] **Gemini API**\n`{status}`: {error_msg}"
+                    return f"[오류] **Gemini API**\n`{status_code}`: {error_msg}"
             
             except Exception as e:
+                print(f"Request Exception (Attempt {attempt+1}): {e}")
                 if attempt < retries - 1:
-                    time.sleep(2)
+                    time.sleep(5)
                     continue
                 return f"❌ AI Request Failed: {e}"
         return "❌ AI Request Failed after retries."

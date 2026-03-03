@@ -237,17 +237,16 @@ def handle_command(chat_id, text):
 
     elif cmd in ["/start", "hello", "hi"]:
         msg = (
-            "🤖 **SPK Mobile Bot v1.1.0 (Gemini AI)**\n"
+            "🤖 **SPK Mobile Bot v1.2.1 (Strategic Master)**\n"
             "Status: **Online**\n\n"
-            "**Commands:**\n"
+            "**Strategic Commands:**\n"
             "`/price [code]` - Check Price\n"
             "`/analyze [code]` - AI Strategy\n"
+            "`/market` - 파생상품 종합 + AI분석 (v1.2.1)\n"
+            "`/subscribe` - 장전/야간 전략 리포트 구독\n"
+            "\n**Operations:**\n"
             "`/watch [code] [>|<] [price]` - Set Alert\n"
             "`/list` - List Futures\n"
-            "`/futures [date]` - 선물 시세 (공공데이터)\n"
-            "`/options [date]` - 옵션 시세 (공공데이터)\n"
-            "`/market` - 파생상품 종합 + AI분석\n"
-            "`/rt_status` - Realtime Status\n"
             "`/id` - Get Chat ID"
         )
         send_message(chat_id, msg)
@@ -770,8 +769,8 @@ def job_morning_report(is_open=False):
     for chat_id_str, position in subs.items():
         try:
             chat_id = int(chat_id_str)
-            title = "🌅 **[08:50] 장전 포지션 시나리오 전략 분석 보고서**" if is_open else "🌃 **[05:00] 야간 장 마무리 분석 리포트**"
-            send_message(chat_id, f"{title}\n\n📝 설정 포지션: `{position}`\n\nAI가 포지션 기반으로 분석합니다. (1~2분 소요, 잠시만 기다려 주세요.)")
+            title = "🌅 **[Strategic Master] 장전 포지션 시나리오 보고서 (v1.2.1)**" if is_open else "🌃 **[Strategic Master] 야간 장 마무리 분석 리포트 (v1.2.1)**"
+            send_message(chat_id, f"{title}\n\n📝 설정 포지션: `{position}`\n\nAI가 'Strategic Operations' 모드로 분석 중입니다. (1분 소요)")
             
             reply = advisor.get_portfolio_strategy(user_portfolio_text=position, market_context=market_context)
             send_message(chat_id, reply)
