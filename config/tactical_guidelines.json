@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-03-04T00:20:00+09:00",
+  "command": "monitor_stock_price",
+  "target": "삼성전자",
+  "symbol": "005930",
+  "condition": "<=",
+  "price": 180000,
+  "action": "매수 타점 감시",
+  "market_type": "야간 시장",
+  "source": "CoreBot"
+}

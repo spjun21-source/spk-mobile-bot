@@ -15,7 +15,6 @@ if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
     except Exception:
         pass
-
 from src.clients.xing_rest import XingRestTrader
 from src.clients.gemini import GeminiAdvisor
 from src.clients.xing_realtime import XingRealtimeClient, parse_futures_execution, parse_futures_orderbook, TR_DESCRIPTIONS
@@ -39,7 +38,9 @@ brave_client = None      # BraveSearchClient instance
 advisor = None           # GeminiAdvisor instance
 
 # --- Subscriber Management ---
-SUBSCRIBERS_FILE = os.path.join(os.path.dirname(__file__), "..", "config", "subscribers.json")
+CONFIG_DIR = os.path.join(os.path.dirname(__file__), "..", "config")
+SUBSCRIBERS_FILE = os.path.join(CONFIG_DIR, "subscribers.json")
+TACTICAL_GUIDELINES_FILE = os.path.join(CONFIG_DIR, "tactical_guidelines.json")
 
 def load_subscribers():
     if not os.path.exists(SUBSCRIBERS_FILE):
@@ -48,9 +49,82 @@ def load_subscribers():
         return json.load(f)
 
 def save_subscribers(subs):
-    os.makedirs(os.path.dirname(SUBSCRIBERS_FILE), exist_ok=True)
+    os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as f:
         json.dump(subs, f, ensure_ascii=False, indent=4)
+
+def monitor_guidelines():
+    """
+    Observer thread that polls tactical_guidelines.json for updates from Corebot.
+    Uses a local state file to avoid re-processing the same directive on restarts.
+    """
+    last_processed_ts = ""
+    state_file = os.path.join(CONFIG_DIR, "last_c2m_ts.txt")
+    
+    # Load last processed timestamp
+    if os.path.exists(state_file):
+        try:
+            with open(state_file, "r") as f:
+                last_processed_ts = f.read().strip()
+        except Exception:
+            pass
+
+    while True:
+        try:
+            if os.path.exists(TACTICAL_GUIDELINES_FILE):
+                mtime = os.path.getmtime(TACTICAL_GUIDELINES_FILE)
+                # We still check mtime for efficiency, but use ts for correctness
+                with open(TACTICAL_GUIDELINES_FILE, "r", encoding="utf-8") as f:
+                    guidelines = json.load(f)
+                
+                current_ts = str(guidelines.get("timestamp", mtime))
+                
+                if current_ts != last_processed_ts:
+                    last_processed_ts = current_ts
+                    # Save state
+                    with open(state_file, "w") as f:
+                        f.write(current_ts)
+                    
+                    # Process guideline
+                    code = guidelines.get("code") or guidelines.get("symbol")
+                    target = guidelines.get("target") or guidelines.get("price")
+                    condition = guidelines.get("condition", "<")
+                    chat_id = guidelines.get("chat_id", "6532799784")
+
+                    if condition == "<=": condition = "<"
+                    if condition == ">=": condition = ">"
+                    
+                    if code and target:
+                        try:
+                            target_val = float(target)
+                        except (ValueError, TypeError):
+                            price_val = guidelines.get("price")
+                            if price_val:
+                                target_val = float(price_val)
+                            else:
+                                continue
+
+                        # Add to active alerts
+                        active_alerts.append({
+                            'chat_id': int(chat_id),
+                            'code': str(code),
+                            'condition': condition,
+                            'target': target_val
+                        })
+                        
+                        msg = (
+                            f"✅ **전략 하달 수신 완료 (C2M Bridge)**\n"
+                            f"Target: `{code}` ({lookup_name(code)})\n"
+                            f"Condition: {condition} {target_val}\n"
+                            f"Status: **실시간 감시 기동됨**"
+                        )
+                        send_message(chat_id, msg)
+                        print(f"[C2M] New guideline applied: {code} {condition} {target_val} (TS: {current_ts})")
+                        
+        except Exception as e:
+            print(f"[C2M Error] monitor_guidelines: {e}")
+        
+        time.sleep(10)
 
 # --- Futures Name Cache ---
 futures_name_cache = {}  # code -> name mapping
@@ -837,5 +911,9 @@ if __name__ == "__main__":
     # Start Scheduler Thread
     print("Starting Automated Reporting Scheduler...")
     threading.Thread(target=run_schedule, daemon=True).start()
+    
+    # Start C2M Guideline Observer Thread
+    print("Starting C2M Command Bridge Observer...")
+    threading.Thread(target=monitor_guidelines, daemon=True).start()
     
     run_bot()
