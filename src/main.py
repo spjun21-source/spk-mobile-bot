@@ -231,6 +231,10 @@ def handle_command(chat_id, text):
             send_message(chat_id, "현재 구독 중이 아닙니다.")
         return
 
+    elif cmd == "/id":
+        send_message(chat_id, f"👤 **My Chat ID:** `{chat_id}`")
+        return
+
     elif cmd in ["/start", "hello", "hi"]:
         msg = (
             "🤖 **SPK Mobile Bot v1.1.0 (Gemini AI)**\n"
@@ -243,9 +247,8 @@ def handle_command(chat_id, text):
             "`/futures [date]` - 선물 시세 (공공데이터)\n"
             "`/options [date]` - 옵션 시세 (공공데이터)\n"
             "`/market` - 파생상품 종합 + AI분석\n"
-            "`/realtime [code]` - Live Execution Feed\n"
-            "`/orderbook [code]` - Live Orderbook\n"
-            "`/rt_status` - Realtime Status"
+            "`/rt_status` - Realtime Status\n"
+            "`/id` - Get Chat ID"
         )
         send_message(chat_id, msg)
 
@@ -627,6 +630,20 @@ def handle_command(chat_id, text):
                 # 1. Fetch pre-market context (US wrap-up & KOSPI summary)
                 us_market_context = brave_client.search("간밤 미국 증시 마감 요약 주요 지수 특징주") if brave_client else "미국 증시 검색 불가"
                 
+                # 2. Extract Tickers and Fetch Real-time Prices
+                # Look for 6-digit stock codes (e.g., 005930) or futures codes
+                import re
+                tickers = re.findall(r"\b\d{6}\b", text)
+                realtime_prices = {}
+                for t in tickers:
+                    px_data = get_price_data(t)
+                    if px_data and px_data.get('price'):
+                         realtime_prices[t] = px_data['price']
+                
+                price_context = ""
+                if realtime_prices:
+                    price_context = "\n[실시간 시장가 데이터]\n" + "\n".join([f"- {lookup_name(k)} ({k}): {v:,}원" for k,v in realtime_prices.items()])
+
                 try:
                     kr_summary = public_data.get_market_summary()
                     kr_market_context = PublicDataClient.format_market_summary(kr_summary)
@@ -634,9 +651,9 @@ def handle_command(chat_id, text):
                     kr_market_context = f"한국 시장 요약 가져오기 실패: {e}"
                 
                 # Format contexts into a single string for Gemini
-                market_context = f"[미국 증시 동향]\n{us_market_context}\n\n[국내 파생/현물 기초 데이터]\n{kr_market_context}"
+                market_context = f"{price_context}\n\n[미국 증시 동향]\n{us_market_context}\n\n[국내 파생/현물 기초 데이터]\n{kr_market_context}"
                 
-                # 2. Call Gemini for strategy 
+                # 3. Call Gemini for strategy 
                 reply = advisor.get_portfolio_strategy(user_portfolio_text=text, market_context=market_context)
                 
             elif action == "weekly_strategy":

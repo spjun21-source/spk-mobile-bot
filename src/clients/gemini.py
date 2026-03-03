@@ -1,6 +1,7 @@
 
 import requests
 import json
+import time
 
 class GeminiAdvisor:
     def __init__(self, api_key):
@@ -154,16 +155,15 @@ class GeminiAdvisor:
         
         Your task:
         1. **Market Diagnosis**: Briefly summarize the overnight US market trend and how it might impact the KOSPI open (Gap up / Gap down / Mixed).
-        2. **Position Assessment**: Analyze the risks and opportunities for their specific holdings based on this expected open.
-        3. **Tactical Scenarios**: Provide clear scenarios:
-           - [Scenario A]: If the market opens strong, what should they do with their positions (e.g., hold futures, take profit on calls)?
-           - [Scenario B]: If the market opens weak or reverses, where is the pain point (stop-loss / hedge recommendation)?
+        2. **Current Portfolio Evaluation**: Evaluate the user's specific positions using the provided context. If "[실시간 시장가 데이터]" is present, use those actual prices to calculate exact losses/gains.
+        3. **Rebalancing Strategy**: Provide a concrete rebalancing plan. For losing positions, suggest specific "Pain Points" (stop loss) and "Averaging Down" levels based on the market bias.
+        4. **Tactical Scenarios (A/B)**: Define clear "If X, then do Y" steps for the market open.
         
         Write the response in professional, structured, conversational Korean. Use bullet points and bold text for readability.
         """
         return self._generate(prompt)
 
-    def _generate(self, prompt, retries=2):
+    def _generate(self, prompt, retries=3):
         import time
         payload = {
             "contents": [{
@@ -171,31 +171,30 @@ class GeminiAdvisor:
             }]
         }
 
-        import time
-        for attempt in range(retries + 1):
+        for attempt in range(retries):
             try:
                 response = requests.post(self.url, json=payload, headers={"Content-Type": "application/json"}, timeout=60)
                 result = response.json()
+                
                 if response.status_code == 200:
                     if 'candidates' in result and result['candidates']:
                          return result['candidates'][0]['content']['parts'][0]['text']
                     else:
                          return "AI returned no content."
-                else:
-                    error_msg = result.get('error', {}).get('message', response.text)
-                    status = result.get('error', {}).get('status', response.status_code)
-                    err_str = (error_msg or "") + str(result)
-                    
-                    # 할당량 초과 시 자동 재시도 로직
-                    if "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower() or status == 429:
-                        print(f"RATE LIMIT WARN: {err_str}")
+                
+                elif response.status_code == 429:
+                    # RESOURCE_EXHAUSTED / Quota exceeded
+                    error_msg = result.get('error', {}).get('message', "")
+                    if "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg.lower():
+                        print(f"RATE LIMIT WARN (429): {error_msg}")
                         if attempt == 0:
                             print(f"[Gemini API] 429 Rate limit hit. Waiting 65s to clear 1-minute window...")
                             time.sleep(65)
                             continue
-                        elif attempt == 1:
-                            print(f"[Gemini API] 429 Rate limit hit again. Waiting 10s...")
-                            time.sleep(10)
+                        elif attempt < retries - 1:
+                            wait_time = (attempt + 1) * 5
+                            print(f"[Gemini API] 429 Rate limit hit again. Waiting {wait_time}s...")
+                            time.sleep(wait_time)
                             continue
                         else:
                             return (
@@ -203,9 +202,15 @@ class GeminiAdvisor:
                                 "짧은 시간에 많은 분석을 요청하여 구글 서버가 일시적으로 차단했습니다.\n"
                                 "잠시 후(약 1분) 다시 시도해 주세요. (무료 서버 한도: 분당 15요청)"
                             )
+                
+                else:
+                    error_msg = result.get('error', {}).get('message', response.text)
+                    status = result.get('error', {}).get('status', response.status_code)
                     return f"[오류] **Gemini API**\n`{status}`: {error_msg}"
+            
             except Exception as e:
-                if attempt < retries:
-                    time.sleep(5)
+                if attempt < retries - 1:
+                    time.sleep(2)
                     continue
-                return f"[오류] AI Request Failed: {e}"
+                return f"❌ AI Request Failed: {e}"
+        return "❌ AI Request Failed after retries."
