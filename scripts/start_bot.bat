@@ -29,7 +29,7 @@ set "PYTHONIOENCODING=utf-8"
 
 :: Start in background; log to spk_bot.log so we can see startup errors
 echo [*] Starting SPK Mobile Bot in background...
-start "" /B cmd /c ""%PYEXE%" -m src.main >> spk_bot.log 2>&1"
+start "" /B cmd /c ""%PYEXE%" -u -m src.main >> spk_bot.log 2>&1"
 
 :: Wait a moment for PID file
 timeout /t 2 /nobreak >nul

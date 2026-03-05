@@ -6,24 +6,36 @@ import argparse
 
 class XingRestTrader:
     def __init__(self, config_file="xing_config.json"):
-        # Resolve path relative to the scratch directory (where config is located)
+        # Resolve path relative to the scratch directory
         if not os.path.isabs(config_file):
-             # __file__ is in spk-mobile-bot/src/clients/
-             # root is spk-mobile-bot/ (two levels up)
              root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
              config_file = os.path.join(root_dir, "config", config_file)
              
+        self.base_url = "https://openapi.ls-sec.co.kr:8080"
+        self.access_token = None
+        self.config = None
+
         try:
             with open(config_file, "r", encoding="utf-8-sig") as f:
                 self.config = json.load(f)
+                self.base_url = self.config.get("base_url", "https://openapi.ls-sec.co.kr:8080")
+                print(f"Loaded config from {config_file}")
         except FileNotFoundError:
-            print(f"Config file '{config_file}' not found. Xing API disabled (Telegram bot will still run).")
-            self.config = None
-            self.base_url = "https://openapi.ls-sec.co.kr:8080"
-            self.access_token = None
-            return
-        self.base_url = self.config.get("base_url", "https://openapi.ls-sec.co.kr:8080")
-        self.access_token = None
+            # Fallback to Environment Variables
+            app_key = os.getenv("LS_DERIV_APP_KEY")
+            app_secret = os.getenv("LS_DERIV_APP_SECRET")
+            account_no = os.getenv("LS_DERIV_ACCOUNT")
+            
+            if app_key and app_secret:
+                self.config = {
+                    "app_key": app_key,
+                    "app_secret": app_secret,
+                    "account_no": account_no,
+                    "base_url": "https://openapi.ls-sec.co.kr:8080"
+                }
+                print("XingRestTrader: Initialized using Environment Variables.")
+            else:
+                print(f"Config file '{config_file}' not found and Env vars missing. Xing API disabled.")
 
     def get_access_token(self):
         if self.config is None:
@@ -110,11 +122,13 @@ class XingRestTrader:
                         "low": low_price
                     }
                 else:
-                    print(f"No out_block in result: {result}")
+                    print(f"XingRestTrader: No out_block '{out_block}' in result for {code}. Result keys: {list(result.keys())}", flush=True)
+                    if "rsp_msg" in result:
+                        print(f"XingRestTrader: Response message: {result['rsp_msg']}", flush=True)
                     return None
             else:
-                print(f"Request Failed for {code}: {response.status_code}")
-                print(f"Response: {response.text}")
+                print(f"XingRestTrader: Request Failed for {code}: HTTP {response.status_code}", flush=True)
+                print(f"XingRestTrader: Response: {response.text}", flush=True)
                 return None
         except Exception as e:
             print(f"Error: {e}")
@@ -122,6 +136,63 @@ class XingRestTrader:
 
     def get_stock_price(self, shcode):
         return self._get_price_generic("stock", shcode)
+
+    def get_stock_chart_daily(self, shcode, count=10):
+        if not self.access_token: return None
+        url = f"{self.base_url}/stock/market-data"
+        headers = {
+            "Content-Type": "application/json; charset=UTF-8",
+            "Authorization": f"Bearer {self.access_token}",
+            "tr_cd": "t4201", "tr_cont": "N", "tr_cont_key": "",
+        }
+        body = { "t4201InBlock": { "shcode": shcode, "gubun": "0", "qrycnt": count, "sdate": "", "edate": "", "comp_yn": "N" } }
+        try:
+            response = requests.post(url, headers=headers, json=body, verify=False)
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("t4201OutBlock1", [])
+            return None
+        except Exception as e:
+            print(f"Error t4201: {e}")
+            return None
+
+    def get_stock_chart_minute(self, shcode, interval=1, count=10):
+        if not self.access_token: return None
+        url = f"{self.base_url}/stock/market-data"
+        headers = {
+            "Content-Type": "application/json; charset=UTF-8",
+            "Authorization": f"Bearer {self.access_token}",
+            "tr_cd": "t4203", "tr_cont": "N", "tr_cont_key": "",
+        }
+        body = { "t4203InBlock": { "shcode": shcode, "ncnt": interval, "qrycnt": count, "sdate": "", "stime": "", "edate": "", "etime": "" } }
+        try:
+            response = requests.post(url, headers=headers, json=body, verify=False)
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("t4203OutBlock1", [])
+            return None
+        except Exception as e:
+            print(f"Error t4203: {e}")
+            return None
+
+    def get_futures_chart_minute(self, focode, interval=1, count=10):
+        if not self.access_token: return None
+        url = f"{self.base_url}/futureoption/market-data"
+        headers = {
+            "Content-Type": "application/json; charset=UTF-8",
+            "Authorization": f"Bearer {self.access_token}",
+            "tr_cd": "t8413", "tr_cont": "N", "tr_cont_key": "",
+        }
+        body = { "t8413InBlock": { "focode": focode, "ncnt": interval, "qrycnt": count, "nday": "0", "sdate": "", "stime": "", "edate": "", "etime": "", "comp_yn": "N" } }
+        try:
+            response = requests.post(url, headers=headers, json=body, verify=False)
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("t8413OutBlock1", [])
+            return None
+        except Exception as e:
+            print(f"Error t8413: {e}")
+            return None
 
     def get_futures_price(self, shcode):
         return self._get_price_generic("future", shcode)

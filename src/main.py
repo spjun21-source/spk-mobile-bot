@@ -32,7 +32,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "REPLACE_ME")
 BRAVE_API_KEY = os.getenv("BRAVE_API_KEY", "")
 
 # --- Global Instances (set in __main__) ---
-realtime_client = None  # XingRealtimeClient instance
+trader = None            # XingRestTrader instance
+realtime_client = None   # XingRealtimeClient instance
 public_data = None       # PublicDataClient instance
 brave_client = None      # BraveSearchClient instance
 advisor = None           # GeminiAdvisor instance
@@ -658,22 +659,39 @@ def handle_command(chat_id, text):
             elif action == "stock_analysis":
                 if target_code:
                     name = lookup_name(target_code)
-                    send_message(chat_id, f"📊 **{name}**(`{target_code}`) 최근 동향 및 추세 분석 중입니다...\n(인터넷 뉴스 검색이 포함되어 잠시 소요됩니다.)")
+                    send_message(chat_id, f"📊 **{name}**(`{target_code}`) 최근 동향 및 추세 분석 중입니다...\n(인터넷 뉴스 검색 및 캔들 데이터 수집이 포함되어 잠시 소요됩니다.)")
                     
                     price_data = get_price_data(target_code)
-                    if price_data:
-                        price_data['asset_name'] = name
-                    else:
+                    if not price_data:
                         price_data = {"error": f"No real-time data for {name}"}
-
+                    
+                    # --- Multi-Timeframe Candle Data (Supply-Demand Analysis) ---
+                    daily_data = []
+                    min5_data = []
+                    min15_data = []
+                    
+                    # Case 1: Samsung Electronics (Stock or Future Proxy)
+                    if target_code == "005930" or target_code.startswith("101"):
+                        stock_code = "005930"
+                        print(f"Fetching multi-timeframe candles for {stock_code}...", flush=True)
+                        daily_data = trader.get_stock_chart_daily(stock_code, count=10)
+                        min5_data = trader.get_stock_chart_minute(stock_code, interval=5, count=10)
+                        min15_data = trader.get_stock_chart_minute(stock_code, interval=15, count=10)
+                    
                     search_query = f"{name} 주식 주가 시세 장기 전망 분석"
                     search_results = brave_client.search(search_query) if brave_client else "인터넷 검색 모듈 비활성화"
                     
-                    combined_data = {
-                        "current_price_data": price_data,
-                        "recent_news_and_external_analysis": search_results
+                    # ByPASS ready context construction
+                    candle_context = {
+                        "daily": daily_data if daily_data else "No daily data",
+                        "min5": min5_data if min5_data else "No 5min data",
+                        "min15": min15_data if min15_data else "No 15min data"
                     }
-                    reply = advisor.format_response(text, combined_data, data_type="stock comprehensive analysis and prediction")
+                    
+                    # Always call the enhanced multi-timeframe response (ByPASS aware)
+                    reply = advisor.format_multi_timeframe_response(
+                        text, f"{name}({target_code})", daily_data, min5_data, min15_data, price_data, search_results
+                    )
                 else:
                     reply = "어떤 종목을 분석해 드릴까요? (예: 지난 주 삼성전자 주가 분석해줘)"
             
@@ -727,6 +745,8 @@ def handle_command(chat_id, text):
                 market_context = f"{price_context}\n\n[미국 증시 동향]\n{us_market_context}\n\n[국내 파생/현물 기초 데이터]\n{kr_market_context}"
                 
                 # 3. Call Gemini for strategy 
+                # If market_context has missing parts (e.g., night session futures), 
+                # Gemini v1.2.1 is now instructed to provide a ByPASS/Macro report instead of failing.
                 reply = advisor.get_portfolio_strategy(user_portfolio_text=text, market_context=market_context)
                 
             elif action == "weekly_strategy":
@@ -879,30 +899,32 @@ if __name__ == "__main__":
     atexit.register(_remove_pid)
 
     # Initialize Global Instances
-    print("Initializing Xing API...")
+    print("Initializing Xing API...", flush=True)
     trader = XingRestTrader()
     if not trader.get_access_token():
-        print("Warning: Xing Token Failed. Bot will start but API calls may fail.")
+        print("Warning: Xing Token Failed. Bot will start but API calls may fail.", flush=True)
+    else:
+        print("Xing API Token obtained successfully.", flush=True)
 
-    print("Building futures cache...")
+    print("Building futures cache...", flush=True)
     build_futures_cache(trader)
 
-    print("Initializing Public Data Client...")
+    print("Initializing Public Data Client...", flush=True)
     public_data = PublicDataClient()
 
-    print("Initializing Brave Search Client...")
+    print("Initializing Brave Search Client...", flush=True)
     brave_client = BraveSearchClient(api_key=BRAVE_API_KEY)
 
-    print("Initializing Gemini Advisor...")
+    print("Initializing Gemini Advisor...", flush=True)
     advisor = GeminiAdvisor(GEMINI_API_KEY)
     
     # Initialize Realtime WebSocket Client
-    print("Initializing Realtime WebSocket...")
+    print("Initializing Realtime WebSocket...", flush=True)
     realtime_client = XingRealtimeClient()
     if realtime_client.start():
-        print("Realtime WebSocket connected.")
+        print("Realtime WebSocket connected.", flush=True)
     else:
-        print("Warning: Realtime WebSocket failed. /realtime commands may not work.")
+        print("Warning: Realtime WebSocket failed. /realtime commands may not work.", flush=True)
 
     # Start Alert Thread
     print("Starting Alert Monitor...")
