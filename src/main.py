@@ -9,12 +9,13 @@ import schedule
 import atexit
 
 # Windows: 콘솔/로그 cp949로 인한 이모지(❌ 등) UnicodeEncodeError 방지
-if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
-    try:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-    except Exception:
-        pass
+# NOTE: Disabled - causes IO deadlock on Windows when running as background process
+# if sys.platform == "win32" and hasattr(sys.stdout, "buffer"):
+#     try:
+#         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+#         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+#     except Exception:
+#         pass
 from src.clients.xing_rest import XingRestTrader
 from src.clients.gemini import GeminiAdvisor
 from src.clients.xing_realtime import XingRealtimeClient, parse_futures_execution, parse_futures_orderbook, TR_DESCRIPTIONS
@@ -278,9 +279,11 @@ def check_alerts():
         time.sleep(5) # Check every 5 seconds
 
 def handle_command(chat_id, text):
+  try:
     parts = text.split()
     if not parts: return
     cmd = parts[0].lower()
+    print(f"[CMD] {cmd} | text={text[:60]}", flush=True)
     
     print(f"Processing command: {cmd}")
 
@@ -695,6 +698,52 @@ def handle_command(chat_id, text):
                 else:
                     reply = "어떤 종목을 분석해 드릴까요? (예: 지난 주 삼성전자 주가 분석해줘)"
             
+            elif action == "night_market":
+                # Direct formatting — no Gemini API call needed, saves quota
+                try:
+                    summary = public_data.get_market_summary()
+                    futures_list = summary.get('futures', [])
+                    if futures_list:
+                        lines = []
+                        for f in futures_list[:3]:
+                            name = f.get('itmsNm', '?')
+                            clpr = f.get('clpr', '0')
+                            vs = f.get('vs', '0')
+                            mkp = f.get('mkp', '0')
+                            hipr = f.get('hipr', '0')
+                            lopr = f.get('lopr', '0')
+                            trqu = f.get('trqu', '0')
+                            try:
+                                vs_val = float(vs)
+                                arrow = "+" if vs_val >= 0 else ""
+                            except:
+                                arrow = ""
+                            lines.append(
+                                f"*{name}*\n"
+                                f"  종가: *{clpr}* ({arrow}{vs})\n"
+                                f"  시가: {mkp} / 고가: {hipr} / 저가: {lopr}\n"
+                                f"  거래량: {int(trqu):,}\n"
+                            )
+                        calls = summary.get('calls_top', [])
+                        puts = summary.get('puts_top', [])
+                        if calls or puts:
+                            lines.append("\n*주요 옵션*")
+                            for c in calls[:2]:
+                                lines.append(f"  콜 {c.get('itmsNm','?')}: {c.get('clpr','?')} ({c.get('vs','?')})")
+                            for p in puts[:2]:
+                                lines.append(f"  풋 {p.get('itmsNm','?')}: {p.get('clpr','?')} ({p.get('vs','?')})")
+                        bas_dt_str = futures_list[0].get('basDt', '')
+                        date_display = f"{bas_dt_str[:4]}-{bas_dt_str[4:6]}-{bas_dt_str[6:]}" if len(bas_dt_str) == 8 else bas_dt_str
+                        reply = (
+                            f"야간 선물/옵션 시황 리포트\n"
+                            f"(기준일: {date_display}, 조회: {time.strftime('%H:%M')})\n\n"
+                            + "\n".join(lines)
+                        )
+                    else:
+                        reply = "야간 선물 데이터를 가져올 수 없습니다."
+                except Exception as night_e:
+                    reply = f"야간 시황 조회 실패: {night_e}"
+
             elif action == "market":
                 summary = public_data.get_market_summary()
                 reply = advisor.format_response(text, summary, data_type="market summary")
@@ -782,9 +831,21 @@ def handle_command(chat_id, text):
             safe_msg = intent_json.replace("\u274c", "[X]")
             send_message(chat_id, f"[오류] AI 서버 응답 오류:\n{safe_msg}")
         except Exception as e:
-            print(f"Intent routing error: {e}")
-            # 이모지 사용 시 cp949 환경에서 재오류 가능하므로 일반 문자로 전송
+            import traceback
+            print(f"Intent routing error: {e}", flush=True)
+            traceback.print_exc()
+            sys.stdout.flush()
             send_message(chat_id, f"[오류] {e}")
+
+  except Exception as e:
+    import traceback
+    print(f"CRITICAL ERROR in handle_command: {e}", flush=True)
+    traceback.print_exc()
+    sys.stdout.flush()
+    try:
+        send_message(chat_id, f"치명적 오류: {e}")
+    except:
+        pass
 
 def run_bot():
     offset = 0

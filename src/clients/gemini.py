@@ -6,8 +6,8 @@ import time
 class GeminiAdvisor:
     def __init__(self, api_key):
         self.api_key = api_key
-        # Using gemini-flash-latest because it has standard Free Tier quotas (1,500 RPD).
-        self.url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={self.api_key}"
+        # Using gemini-2.0-flash for better quota and performance.
+        self.url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.api_key}"
         
         # Cache for recent identical intents to save API quota
         self._intent_cache = {}
@@ -71,7 +71,7 @@ class GeminiAdvisor:
         Extract the user's intent from the following text: "{user_text}"
         
         Rules:
-        1. Action MUST be one of: "price", "market", "futures", "options", "web_search", "portfolio_strategy", "chat", "stock_analysis", "weekly_strategy".
+        1. Action MUST be one of: "price", "market", "night_market", "futures", "options", "web_search", "portfolio_strategy", "chat", "stock_analysis", "weekly_strategy".
         2. Target code MUST be a 6-to-8 character code like "005930" (Samsung) or "101V6000" (KOSPI 200). 
            - Map "삼성전자", "삼성", "samsung" to "005930"
            - Map "에스케이", "sk하이닉스", "hynix" to "000660"
@@ -83,7 +83,8 @@ class GeminiAdvisor:
         3. Intents:
            - Asking for a KOREAN company's current price/simple quote -> "price"
            - Asking for a deep analysis, historical trends, or future predictions of a specific stock -> "stock_analysis"
-           - Asking for a general KOREAN market summary/overview -> "market"
+           - Asking for a general KOREAN market summary/overview (Daytime Focus) -> "market"
+           - Specifically asking about "야간 선물", "야간 옵션", "야간 시장", "night market" -> "night_market"
            - Asking for KOSPI futures prices without specific code -> "futures"
            - Asking for KOSPI options prices -> "options"
            - Asking for US/Global markets, Crypto, specific News -> "web_search"
@@ -93,7 +94,7 @@ class GeminiAdvisor:
         
         Respond ONLY with a valid JSON object. No markdown formatting, no backticks.
         Example 1: {{"action": "price", "target_code": "005930"}}
-        Example 2: {{"action": "stock_analysis", "target_code": "005930"}}
+        Example 2: {{"action": "night_market", "target_code": ""}}
         Example 3: {{"action": "web_search", "target_code": "테슬라 애플 주가"}}
         Example 4: {{"action": "portfolio_strategy", "target_code": ""}}
         Example 5: {{"action": "weekly_strategy", "target_code": ""}}
@@ -109,7 +110,7 @@ class GeminiAdvisor:
             
         if user_text in self._intent_cache:
             cache_time, cached_result = self._intent_cache[user_text]
-            if time.time() - cache_time < 300: # Cache for 5 minutes
+            if time.time() - cache_time < 1800: # Cache for 30 minutes (Increased from 5)
                 return cached_result
 
         # We need to ensure we only get JSON back
@@ -211,7 +212,7 @@ class GeminiAdvisor:
 
         for attempt in range(retries):
             try:
-                response = requests.post(self.url, json=payload, headers={"Content-Type": "application/json"}, timeout=60)
+                response = requests.post(self.url, json=payload, headers={"Content-Type": "application/json"}, timeout=120)
                 
                 # Try to parse JSON, handle potential parse errors
                 try:
@@ -241,6 +242,19 @@ class GeminiAdvisor:
                 )
                 
                 if is_transient_error:
+                    # If primary model is exhausted, try to fallback to 8B once on first attempt
+                    if attempt == 0 and ("429" in str(status_code) or "RESOURCE_EXHAUSTED" in error_msg):
+                        if "gemini-2.0-flash" in self.url:
+                            f8b_url = self.url.replace("gemini-2.0-flash", "gemini-2.0-flash-lite")
+                            print(f"[Quota] Falling back to 8B model: {f8b_url}")
+                            try:
+                                f8b_resp = requests.post(f8b_url, json=payload, headers={"Content-Type": "application/json"}, timeout=120)
+                                if f8b_resp.status_code == 200:
+                                    f8b_result = f8b_resp.json()
+                                    return f8b_result['candidates'][0]['content']['parts'][0]['text'] # Note: added 'content'
+                            except Exception as f8be:
+                                print(f"8B Fallback failed: {f8be}")
+
                     # Exponential Backoff: 70s, 140s... (Google Free Tier is per minute)
                     wait_time = 70 * (attempt + 1)
                     print(f"RATE LIMIT HIT: {error_msg}. Wait {wait_time}s (Attempt {attempt+1}/{retries})")
