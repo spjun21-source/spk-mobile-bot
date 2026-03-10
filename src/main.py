@@ -766,10 +766,7 @@ def handle_command(chat_id, text):
                 except Exception as night_e:
                     reply = f"야간 시황 조회 실패: {night_e}"
 
-            elif action == "market":
-                summary = public_data.get_market_summary()
-                reply = advisor.format_response(text, summary, data_type="market summary")
-                
+            # Action 'market' has been merged with 'portfolio_strategy' for Bypass support
             elif action == "futures":
                 data = public_data.get_kospi200_futures()
                 reply = advisor.format_response(text, data, data_type="futures list")
@@ -786,9 +783,10 @@ def handle_command(chat_id, text):
                 else:
                     reply = "무엇을 검색해 드릴까요? (예: 미국 나스닥 상황 알려줘)"
 
-            elif action == "portfolio_strategy":
-                send_message(chat_id, "📊 보유 포지션 기반 프리마켓 시나리오 분석 중...\n(데이터 수집·AI 분석에 30초~1분 소요, 여유 있게 기다려 주세요.)")
-                print("DEBUG: portfolio_strategy started.")
+            elif action in ["portfolio_strategy", "market"]:
+                msg_text = "📊 보유 포지션 기반 시나리오 분석 중..." if action == "portfolio_strategy" else "📊 실시간 장중 시황 및 전략 시나리오 분석 중..."
+                send_message(chat_id, f"{msg_text}\n(데이터 수집·AI 분석에 10초~30초 소요, 잠시만 기다려 주세요.)")
+                print(f"DEBUG: {action} started.")
                 
                 # 1. Fetch pre-market context (US wrap-up & KOSPI summary)
                 print("DEBUG: Trying Brave search...")
@@ -848,7 +846,8 @@ def handle_command(chat_id, text):
                 # If market_context has missing parts (e.g., night session futures), 
                 # Gemini v1.2.2 is now instructed to provide a ByPASS/Macro report instead of failing.
                 print("DEBUG: Trying Gemini get_portfolio_strategy...")
-                reply = advisor.get_portfolio_strategy(user_portfolio_text=text, market_context=market_context)
+                portfolio_input = text if action == "portfolio_strategy" else "단순 시황 요약 요청이므로 특정 포지션은 없음."
+                reply = advisor.get_portfolio_strategy(user_portfolio_text=portfolio_input, market_context=market_context)
                 print("DEBUG: Gemini get_portfolio_strategy finish.")
                 
             elif action == "weekly_strategy":
