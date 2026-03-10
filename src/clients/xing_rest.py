@@ -53,7 +53,7 @@ class XingRestTrader:
         
         try:
             # print(f"Requesting token from {url}...")
-            response = requests.post(url, headers=headers, data=data, verify=False) 
+            response = requests.post(url, headers=headers, data=data, verify=False, timeout=10) 
             
             if response.status_code == 200:
                 result = response.json()
@@ -104,7 +104,7 @@ class XingRestTrader:
 
         try:
             # print(f"Requesting {type} price for {code}...")
-            response = requests.post(url, headers=headers, json=body, verify=False)
+            response = requests.post(url, headers=headers, json=body, verify=False, timeout=10)
             
             if response.status_code == 200:
                 result = response.json()
@@ -147,7 +147,7 @@ class XingRestTrader:
         }
         body = { "t4201InBlock": { "shcode": shcode, "gubun": "0", "qrycnt": count, "sdate": "", "edate": "", "comp_yn": "N" } }
         try:
-            response = requests.post(url, headers=headers, json=body, verify=False)
+            response = requests.post(url, headers=headers, json=body, verify=False, timeout=10)
             if response.status_code == 200:
                 result = response.json()
                 return result.get("t4201OutBlock1", [])
@@ -166,7 +166,7 @@ class XingRestTrader:
         }
         body = { "t4203InBlock": { "shcode": shcode, "ncnt": interval, "qrycnt": count, "sdate": "", "stime": "", "edate": "", "etime": "" } }
         try:
-            response = requests.post(url, headers=headers, json=body, verify=False)
+            response = requests.post(url, headers=headers, json=body, verify=False, timeout=10)
             if response.status_code == 200:
                 result = response.json()
                 return result.get("t4203OutBlock1", [])
@@ -185,7 +185,7 @@ class XingRestTrader:
         }
         body = { "t8413InBlock": { "focode": focode, "ncnt": interval, "qrycnt": count, "nday": "0", "sdate": "", "stime": "", "edate": "", "etime": "", "comp_yn": "N" } }
         try:
-            response = requests.post(url, headers=headers, json=body, verify=False)
+            response = requests.post(url, headers=headers, json=body, verify=False, timeout=10)
             if response.status_code == 200:
                 result = response.json()
                 return result.get("t8413OutBlock1", [])
@@ -213,7 +213,7 @@ class XingRestTrader:
 
         try:
             print("Requesting KOSPI 200 Futures List (t8402)...")
-            response = requests.post(url, headers=headers, json=body, verify=False)
+            response = requests.post(url, headers=headers, json=body, verify=False, timeout=15)
             if response.status_code == 200:
                 result = response.json()
                 if "t8402OutBlock" in result:
@@ -256,7 +256,7 @@ class XingRestTrader:
 
         try:
             # print("Requesting Futures Code List (t8401)...")
-            response = requests.post(url, headers=headers, json=body, verify=False)
+            response = requests.post(url, headers=headers, json=body, verify=False, timeout=15)
             if response.status_code == 200:
                 result = response.json()
                 codes = []
@@ -310,7 +310,7 @@ class XingRestTrader:
 
         try:
             print(f"Placing Futures Order: {buy_sell_type} {qty} of {shcode} at {price}...")
-            response = requests.post(url, headers=headers, json=body, verify=False)
+            response = requests.post(url, headers=headers, json=body, verify=False, timeout=10)
             if response.status_code == 200:
                 result = response.json()
                 if "CFOAT00100OutBlock1" in result:

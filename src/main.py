@@ -788,9 +788,12 @@ def handle_command(chat_id, text):
 
             elif action == "portfolio_strategy":
                 send_message(chat_id, "📊 보유 포지션 기반 프리마켓 시나리오 분석 중...\n(데이터 수집·AI 분석에 30초~1분 소요, 여유 있게 기다려 주세요.)")
+                print("DEBUG: portfolio_strategy started.")
                 
                 # 1. Fetch pre-market context (US wrap-up & KOSPI summary)
+                print("DEBUG: Trying Brave search...")
                 us_market_context = brave_client.search("간밤 미국 증시 마감 요약 주요 지수 특징주") if brave_client else "미국 증시 검색 불가"
+                print("DEBUG: Brave search finished.")
                 
                 # 2. Extract Tickers and Fetch Real-time Prices
                 # Look for 6-digit stock codes (e.g., 005930) or futures codes
@@ -803,19 +806,24 @@ def handle_command(chat_id, text):
                          realtime_prices[t] = px_data['price']
                          
                 # 2.5 Inject Live Proxies if missing
+                print("DEBUG: Trying live proxy fetch...")
                 try:
                     from datetime import datetime
                     if "005930" not in realtime_prices:
+                        print("DEBUG: Fetching 005930...")
                         s_px = get_price_data("005930")
                         if s_px and s_px.get('price'): realtime_prices["005930"] = s_px['price']
                     
                     # Try KOSPI200 Futures
+                    print("DEBUG: Fetching KOSPI 200 list...")
                     f_list = trader.get_kospi200_futures_list()
                     if f_list:
                         main_f = f_list[0].get('shcode')
                         if main_f and main_f not in realtime_prices:
+                            print(f"DEBUG: Fetching main future {main_f}...")
                             f_px = get_price_data(main_f)
                             if f_px and f_px.get('price'): realtime_prices[main_f] = f_px['price']
+                    print("DEBUG: Live proxy fetch finished.")
                 except Exception as e:
                     print(f"Proxy fetch error: {e}")
                 
@@ -826,8 +834,10 @@ def handle_command(chat_id, text):
                     price_context = f"\n[현재 시간({curr_time}) 기준 실시간 지표]\n" + "\n".join([f"- {lookup_name(k)} ({k}): {v:,}원" for k,v in realtime_prices.items()])
 
                 try:
+                    print("DEBUG: Trying public data get_market_summary...")
                     kr_summary = public_data.get_market_summary()
                     kr_market_context = PublicDataClient.format_market_summary(kr_summary)
+                    print("DEBUG: Public data finish...")
                 except Exception as e:
                     kr_market_context = f"한국 시장 요약 가져오기 실패: {e}"
                 
@@ -836,8 +846,10 @@ def handle_command(chat_id, text):
                 
                 # 3. Call Gemini for strategy 
                 # If market_context has missing parts (e.g., night session futures), 
-                # Gemini v1.2.1 is now instructed to provide a ByPASS/Macro report instead of failing.
+                # Gemini v1.2.2 is now instructed to provide a ByPASS/Macro report instead of failing.
+                print("DEBUG: Trying Gemini get_portfolio_strategy...")
                 reply = advisor.get_portfolio_strategy(user_portfolio_text=text, market_context=market_context)
+                print("DEBUG: Gemini get_portfolio_strategy finish.")
                 
             elif action == "weekly_strategy":
                 send_message(chat_id, "📊 주말 글로벌/국내 시황 및 다음 주 KOSPI200/위클리 옵션 전략을 분석 중입니다...\n(데이터 수집·AI 분석에 약 1분 소요됩니다.)")
