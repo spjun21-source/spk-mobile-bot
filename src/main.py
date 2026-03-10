@@ -315,12 +315,12 @@ def handle_command(chat_id, text):
 
     elif cmd in ["/start", "hello", "hi"]:
         msg = (
-            "🤖 **SPK Mobile Bot v1.2.1 (Strategic Master)**\n"
+            "🤖 **SPK Mobile Bot v1.2.2 (Strategic Master)**\n"
             "Status: **Online**\n\n"
             "**Strategic Commands:**\n"
             "`/price [code]` - Check Price\n"
             "`/analyze [code]` - AI Strategy\n"
-            "`/market` - 파생상품 종합 + AI분석 (v1.2.1)\n"
+            "`/market` - 파생상품 종합 + AI분석 (v1.2.2)\n"
             "`/subscribe` - 장전/야간 전략 리포트 구독\n"
             "\n**Operations:**\n"
             "`/watch [code] [>|<] [price]` - Set Alert\n"
@@ -594,13 +594,35 @@ def handle_command(chat_id, text):
             # AI commentary on the market data
             futures_data = summary.get('futures', [])
             if futures_data and advisor:
+                # Get Live Proxy
+                live_context = ""
+                try:
+                    from datetime import datetime
+                    live_f_px = 0
+                    live_msg = f"\n[실시간 시장 지표 - {datetime.now().strftime('%m-%d %H:%M')}]\n"
+                    
+                    f_list = trader.get_kospi200_futures_list()
+                    if f_list:
+                        main_f_code = f_list[0].get('shcode')
+                        f_px = get_price_data(main_f_code)
+                        if f_px and f_px.get('price'):
+                            live_f_px = float(f_px['price'])
+                            live_msg += f"- 코스피200 선물({main_f_code}): {f_px['price']}\n"
+                    
+                    s_px = get_price_data("005930")
+                    if s_px and s_px.get('price'):
+                        live_msg += f"- 삼성전자(005930): {s_px['price']}\n"
+                except Exception as e:
+                    live_msg = ""
+                    print(f"Market proxy fetch error: {e}")
+
                 main_f = futures_data[0]
                 ai_ctx = {
-                    'price': float(main_f.get('clpr', 0)),
+                    'price': live_f_px if live_f_px > 0 else float(main_f.get('clpr', 0)),
                     'open': float(main_f.get('mkp', 0)),
                     'high': float(main_f.get('hipr', 0)),
                     'low': float(main_f.get('lopr', 0)),
-                    '_derivatives_context': summary_msg
+                    '_derivatives_context': live_msg + "\n" + summary_msg if live_msg else summary_msg
                 }
                 analysis = advisor.get_analysis(ai_ctx, symbol="코스피200 선물")
                 send_message(chat_id, f"🤖 **AI 시장 분석**\n\n{analysis}")
@@ -779,10 +801,29 @@ def handle_command(chat_id, text):
                     px_data = get_price_data(t)
                     if px_data and px_data.get('price'):
                          realtime_prices[t] = px_data['price']
+                         
+                # 2.5 Inject Live Proxies if missing
+                try:
+                    from datetime import datetime
+                    if "005930" not in realtime_prices:
+                        s_px = get_price_data("005930")
+                        if s_px and s_px.get('price'): realtime_prices["005930"] = s_px['price']
+                    
+                    # Try KOSPI200 Futures
+                    f_list = trader.get_kospi200_futures_list()
+                    if f_list:
+                        main_f = f_list[0].get('shcode')
+                        if main_f and main_f not in realtime_prices:
+                            f_px = get_price_data(main_f)
+                            if f_px and f_px.get('price'): realtime_prices[main_f] = f_px['price']
+                except Exception as e:
+                    print(f"Proxy fetch error: {e}")
                 
                 price_context = ""
                 if realtime_prices:
-                    price_context = "\n[실시간 시장가 데이터]\n" + "\n".join([f"- {lookup_name(k)} ({k}): {v:,}원" for k,v in realtime_prices.items()])
+                    from datetime import datetime
+                    curr_time = datetime.now().strftime('%m-%d %H:%M')
+                    price_context = f"\n[현재 시간({curr_time}) 기준 실시간 지표]\n" + "\n".join([f"- {lookup_name(k)} ({k}): {v:,}원" for k,v in realtime_prices.items()])
 
                 try:
                     kr_summary = public_data.get_market_summary()
@@ -913,8 +954,22 @@ def job_morning_report(is_open=False):
     kr_context = "아직 개장 전 사전 데이터가 충분하지 않습니다."
     if is_open:
         try:
+            live_msg = ""
+            try:
+                from datetime import datetime
+                f_list = trader.get_kospi200_futures_list()
+                if f_list:
+                    main_f = f_list[0].get('shcode')
+                    f_px = get_price_data(main_f)
+                    if f_px and f_px.get('price'): live_msg += f"- 코스피200 선물({main_f}): {f_px['price']}\n"
+                s_px = get_price_data("005930")
+                if s_px and s_px.get('price'): live_msg += f"- 삼성전자(005930): {s_px['price']}\n"
+                if live_msg: live_msg = f"[장 출발 실시간 지표 - {datetime.now().strftime('%m-%d %H:%M')}]\n" + live_msg + "\n"
+            except Exception as e:
+                print(f"Morning report proxy fetch error: {e}")
+
             kr_summary = public_data.get_market_summary()
-            kr_context = PublicDataClient.format_market_summary(kr_summary)
+            kr_context = live_msg + PublicDataClient.format_market_summary(kr_summary)
         except Exception as e:
             kr_context = f"한국 프리마켓 요약 실패: {e}"
             
@@ -924,7 +979,7 @@ def job_morning_report(is_open=False):
     for chat_id_str, position in subs.items():
         try:
             chat_id = int(chat_id_str)
-            title = "🌅 **[Strategic Master] 장전 포지션 시나리오 보고서 (v1.2.1)**" if is_open else "🌃 **[Strategic Master] 야간 장 마무리 분석 리포트 (v1.2.1)**"
+            title = "🌅 **[Strategic Master] 장전 포지션 시나리오 보고서 (v1.2.2)**" if is_open else "🌃 **[Strategic Master] 야간 장 마무리 분석 리포트 (v1.2.2)**"
             send_message(chat_id, f"{title}\n\n📝 설정 포지션: `{position}`\n\nAI가 'Strategic Operations' 모드로 분석 중입니다. (1분 소요)")
             
             reply = advisor.get_portfolio_strategy(user_portfolio_text=position, market_context=market_context)
