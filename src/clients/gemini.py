@@ -2,6 +2,7 @@
 import requests
 import json
 import time
+from datetime import datetime
 
 class GeminiAdvisor:
     def __init__(self, api_key):
