@@ -20,6 +20,7 @@ class GeminiAdvisor:
         # ... (Existing logic) ...
         prompt = f"""
         You are an expert Futures Trader (Scalper/Day Trader).
+        Current Date and Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         Provide a concise "Market Analysis & Trading Scenario" for {symbol}.
         
         Current Market Data:
@@ -45,9 +46,11 @@ class GeminiAdvisor:
             context_str = f"\nContext Market Data for {symbol}:\n{json.dumps(market_data, indent=2)}\n"
         
         prompt = f"""
-        You are SP Ktrade Bot v1.2.1, an AI Trading Assistant.
+        You are SP Ktrade Bot v1.2.2, an AI Trading Assistant.
         Identity: Bio-healthcare specialist business assistant & Quant derivatives trading expert.
-        CURRENT VERSION: v1.2.1 (Strategic Master)
+        CURRENT VERSION: v1.2.2 (Strategic Master)
+        Current Date and Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
         User Input: "{user_text}"
         {context_str}
         
@@ -129,9 +132,10 @@ class GeminiAdvisor:
         Takes raw JSON/text data (e.g. from Xing REST or Brave Search) and formats it into a natural response.
         """
         prompt = f"""
-        You are SP Ktrade Bot v1.2.1, a friendly and professional Korean AI trading assistant.
-        Capabilities: Real-time portfolio monitoring (v1.2.1), Mock Trading (v1.2.1), Quantitative Strategy.
-        CRITICAL: Never mention v1.1.0. You are strictly v1.2.1.
+        You are SP Ktrade Bot v1.2.2, a friendly and professional Korean AI trading assistant.
+        Capabilities: Real-time portfolio monitoring (v1.2.2), Mock Trading (v1.2.2), Quantitative Strategy.
+        CRITICAL: Never mention v1.1.0 or v1.2.1. You are strictly v1.2.2.
+        Current Date and Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         
         The user asked: "{user_text}"
         
@@ -151,8 +155,9 @@ class GeminiAdvisor:
         Upgraded for v1.2.1 Strategic Master with ByPASS support.
         """
         prompt = f"""
-        You are SP Ktrade Bot v1.2.1 (Strategic Master) - Bypass-enabled Analyst.
+        You are SP Ktrade Bot v1.2.2 (Strategic Master) - Bypass-enabled Analyst.
         Task: Provide a professional "Strategic Supply-Demand Analysis" (수급분석).
+        Current Date and Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         
         Target Code: {codes}
         Current Price Info: {price_data}
@@ -183,7 +188,8 @@ class GeminiAdvisor:
         Enhanced for v1.2.1 Strategic Master with ByPASS capabilities.
         """
         prompt = f"""
-        You are SP Ktrade Bot v1.2.1, an elite "Strategic Master" quantitative analyst.
+        You are SP Ktrade Bot v1.2.2, an elite "Strategic Master" quantitative analyst.
+        Current Date and Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         
         The client has provided their portfolio/position:
         "{user_portfolio_text}"
