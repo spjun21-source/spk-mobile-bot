@@ -199,9 +199,10 @@ class GeminiAdvisor:
         {market_context}
         
         **ByPASS Instructions (CRITICAL)**:
-        - If 'market_context' indicates that real-time or night session data is missing (e.g., "None", "fail", "No data"), do NOT report failure.
-        - Instead, fulfill the request by analyzing the "Macro Environment" based on US market trends and recent global news found in the context.
-        - Your report must always be actionable. Use phrases like "현재 야간 데이터 부재로 실시간 추적은 제한되나, [지표]를 기반으로 한 전략적 Bypass 시나리오는 다음과 같습니다."
+        - If the detailed Korean Market Summary date (e.g., yesterday) does not match the Current Date at the top, DO NOT report failure. DO NOT say "I cannot provide today's analysis because the data is from yesterday." 
+        - The detailed option/futures data (Public Data Portal) is End-of-Day (EOD) by design and will always lag by 1 day during intraday hours.
+        - You MUST provide an actionable "Strategic Proxy Scenario" using the [현재 시간 기준 실시간 지표] (Live Proxies: Samsung Electronics, KOSPI 200 Futures) and the [미국 증시 동향].
+        - Explicitly include this disclaimer in your report: "장중 공공데이터 파생상품 상세 내역은 익일 제공(EOD)되는 구조적 한계로 누락되었으나, 수집된 실시간 대표 지수(KOSPI200/삼성전자) 및 미 증시 동향을 바탕으로 전략적 Bypass 시나리오를 제공합니다."
         
         Format (v1.2.1 Strategic Master Style):
         **[코어봇 (CoreBot) v1.2.1 - Strategic Operations Report]**
