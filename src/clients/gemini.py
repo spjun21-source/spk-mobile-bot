@@ -6,8 +6,8 @@ import time
 class GeminiAdvisor:
     def __init__(self, api_key):
         self.api_key = api_key
-        # Using gemini-2.0-flash for better quota and performance.
-        self.url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.api_key}"
+        # Using gemini-1.5-flash for stable API availability
+        self.url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.api_key}"
         
         # Cache for recent identical intents to save API quota
         self._intent_cache = {}
@@ -250,8 +250,8 @@ class GeminiAdvisor:
                 if is_transient_error:
                     # If primary model is exhausted, try to fallback to 8B once on first attempt
                     if attempt == 0 and ("429" in str(status_code) or "RESOURCE_EXHAUSTED" in error_msg):
-                        if "gemini-2.0-flash" in self.url:
-                            f8b_url = self.url.replace("gemini-2.0-flash", "gemini-2.0-flash-lite")
+                        if "gemini-1.5-flash" in self.url:
+                            f8b_url = self.url.replace("gemini-1.5-flash", "gemini-1.5-flash-8b")
                             print(f"[Quota] Falling back to 8B model: {f8b_url}")
                             try:
                                 f8b_resp = requests.post(f8b_url, json=payload, headers={"Content-Type": "application/json"}, timeout=120)
