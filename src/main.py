@@ -236,7 +236,26 @@ def get_price_data(code):
     return data # Return original (empty/zero) if no fallback
 
 # --- Global Alert Store ---
-active_alerts = [] # Format: {'chat_id': id, 'code': code, 'condition': '>', 'price': 168000}
+ALERTS_FILE = "alerts_db.json"
+active_alerts = []
+
+def load_alerts():
+    global active_alerts
+    try:
+        if os.path.exists(ALERTS_FILE):
+            with open(ALERTS_FILE, 'r') as f:
+                active_alerts = json.load(f)
+            print(f"Loaded {len(active_alerts)} active alerts from DB.")
+    except Exception as e:
+        print(f"Failed to load alerts: {e}")
+        active_alerts = []
+
+def save_alerts():
+    try:
+        with open(ALERTS_FILE, 'w') as f:
+            json.dump(active_alerts, f)
+    except Exception as e:
+        print(f"Failed to save alerts: {e}")
 
 def check_alerts():
     """
@@ -254,6 +273,7 @@ def check_alerts():
                 try:
                     raw_cprice = str(data.get('price', '0')).replace(',', '').strip()
                     current_price = float(raw_cprice)
+                    print(f"DEBUG ALERT [{code}]: raw='{data.get('price')}' -> parsed={current_price}", flush=True)
                     if current_price == 0: continue
                 except Exception as e:
                     print(f"Alert parsing error for {code} price {data.get('price')}: {e}")
@@ -268,6 +288,8 @@ def check_alerts():
                         elif alert['condition'] == '<' and current_price < alert['target']:
                             triggered = True
                             
+                        print(f"DEBUG ALERT EV: {current_price} {alert['condition']} {alert['target']} => {triggered}", flush=True)
+                            
                         if triggered:
                             msg = (
                                 f"🚨 **SCENARIO TRIGGERED!**\n"
@@ -278,6 +300,7 @@ def check_alerts():
                             )
                             send_message(alert['chat_id'], msg)
                             active_alerts.remove(alert) # One-time alert
+                            save_alerts()
             
         time.sleep(5) # Check every 5 seconds
 
@@ -356,6 +379,7 @@ def handle_command(chat_id, text):
             'condition': condition,
             'target': target
         })
+        save_alerts()
         send_message(chat_id, f"✅ **Alert Set**\nWill notify when `{code}` {condition} {target}")
 
     elif cmd == "/list":
@@ -1057,6 +1081,9 @@ if __name__ == "__main__":
         print("Warning: Realtime WebSocket failed. /realtime commands may not work.", flush=True)
 
     # Start Alert Thread
+    # Load saved alerts
+    load_alerts()
+    
     print("Starting Alert Monitor...")
     threading.Thread(target=check_alerts, daemon=True).start()
     
