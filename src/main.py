@@ -205,7 +205,8 @@ def get_price_data(code):
     
     # If valid future price, return it
     try:
-        price_val = float(data.get('price', 0))
+        raw_price = str(data.get('price', '0')).replace(',', '').strip()
+        price_val = float(raw_price)
     except:
         price_val = 0
         
@@ -251,9 +252,11 @@ def check_alerts():
                 if not data: continue
                 
                 try:
-                    current_price = float(data.get('price', 0))
+                    raw_cprice = str(data.get('price', '0')).replace(',', '').strip()
+                    current_price = float(raw_cprice)
                     if current_price == 0: continue
-                except:
+                except Exception as e:
+                    print(f"Alert parsing error for {code} price {data.get('price')}: {e}")
                     continue
 
                 # Check all alerts for this code
