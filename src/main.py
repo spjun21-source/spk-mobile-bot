@@ -364,7 +364,9 @@ def handle_command(chat_id, text):
         code = parts[1]
         condition = parts[2]
         try:
-            target = float(parts[3])
+            # Strip commas from price (e.g. "190,000" -> "190000")
+            raw_price = parts[3].replace(",", "")
+            target = float(raw_price)
         except:
              send_message(chat_id, "Price must be a number.")
              return
