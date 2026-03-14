@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-03-06T08:15:00+09:00",
+  "command": "market_response_mode",
+  "instruction": "이란 미국 전쟁 상황 변동성 존재, 시장 탄력성 있으나 변동성 민감대응 모드. 국장 하락후 삼전 및 증시 탄력성 회복, 해외투자자 수급 살피는중.",
+  "action": "변동성 민감 대응 모드 집중",
+  "market_type": "국내 시장",
+  "source": "CoreBot"
+}

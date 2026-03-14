@@ -47,9 +47,9 @@ class GeminiAdvisor:
             context_str = f"\nContext Market Data for {symbol}:\n{json.dumps(market_data, indent=2)}\n"
         
         prompt = f"""
-        You are SP Ktrade Bot v1.2.2, an AI Trading Assistant.
+        You are SP Ktrade Bot v1.3.0, an AI Trading Assistant.
         Identity: Bio-healthcare specialist business assistant & Quant derivatives trading expert.
-        CURRENT VERSION: v1.2.2 (Strategic Master)
+        CURRENT VERSION: v1.3.0 (Unified Operations)
         Current Date and Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
         User Input: "{user_text}"
@@ -59,7 +59,7 @@ class GeminiAdvisor:
         - If the user asks for analysis or price, use the Context Market Data (if valid) to answer.
         - If the data is 0 or missing, mention that.
         - If the user asks general questions, answer helpfully.
-        - You MUST identify as SP Ktrade Bot v1.2.1 in your greetings or footer.
+        - You MUST identify as SP Ktrade Bot v1.3.0 in your greetings or footer.
         - Keep it concise and professional.
         """
         return self._generate(prompt)
@@ -133,9 +133,9 @@ class GeminiAdvisor:
         Takes raw JSON/text data (e.g. from Xing REST or Brave Search) and formats it into a natural response.
         """
         prompt = f"""
-        You are SP Ktrade Bot v1.2.2, a friendly and professional Korean AI trading assistant.
-        Capabilities: Real-time portfolio monitoring (v1.2.2), Mock Trading (v1.2.2), Quantitative Strategy.
-        CRITICAL: Never mention v1.1.0 or v1.2.1. You are strictly v1.2.2.
+        You are SP Ktrade Bot v1.3.0, a friendly and professional Korean AI trading assistant.
+        Capabilities: Real-time portfolio monitoring, Mock Trading, Quantitative Strategy, Shared Price Cache.
+        CRITICAL: Never mention previous versions (v1.1, v1.2). You are strictly v1.3.0.
         Current Date and Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         
         The user asked: "{user_text}"
@@ -146,7 +146,7 @@ class GeminiAdvisor:
         Based ONLY on this data, provide a natural, conversational response in Korean.
         If the data indicates an error, contains 0s unexpectedly, or says "no results", explain that the information cannot be fetched right now.
         Use formatting like **bolding** to highlight important numbers or headlines. Keep it concise but informative.
-        Finish the report with "SP Ktrade Bot v1.2.1 (Strategic Master)" footer.
+        Finish the report with "SP Ktrade Bot v1.3.0 (Unified Operations)" footer.
         """
         return self._generate(prompt)
 
@@ -156,7 +156,7 @@ class GeminiAdvisor:
         Upgraded for v1.2.1 Strategic Master with ByPASS support.
         """
         prompt = f"""
-        You are SP Ktrade Bot v1.2.2 (Strategic Master) - Bypass-enabled Analyst.
+        You are SP Ktrade Bot v1.3.0 (Unified Operations) - Bypass-enabled Analyst.
         Task: Provide a professional "Strategic Supply-Demand Analysis" (수급분석).
         Current Date and Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         
@@ -179,7 +179,7 @@ class GeminiAdvisor:
         2. Supply-Demand: Evaluate volume/price behavior or news sentiment.
         3. Perspective: Home Trading System (HTS) expert analyst.
         4. Tone: Quantitative, professional (Korean). 
-        5. Footer: "SP Ktrade Bot v1.2.1 (Strategic Master - Resilient Bypass Mode)"
+        5. Footer: "SP Ktrade Bot v1.3.0 (Unified Operations - Resilient Bypass Mode)"
         """
         return self._generate(prompt)
 
@@ -189,7 +189,7 @@ class GeminiAdvisor:
         Enhanced for v1.2.1 Strategic Master with ByPASS capabilities.
         """
         prompt = f"""
-        You are SP Ktrade Bot v1.2.2, an elite "Strategic Master" quantitative analyst.
+        You are SP Ktrade Bot v1.3.0, an elite "Unified Operations" quantitative analyst.
         Current Date and Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         
         The client has provided their portfolio/position:
@@ -204,8 +204,8 @@ class GeminiAdvisor:
         - You MUST provide an actionable "Strategic Proxy Scenario" using the [현재 시간 기준 실시간 지표] (Live Proxies: Samsung Electronics, KOSPI 200 Futures) and the [미국 증시 동향].
         - Explicitly include this disclaimer in your report: "장중 공공데이터 파생상품 상세 내역은 익일 제공(EOD)되는 구조적 한계로 누락되었으나, 수집된 실시간 대표 지수(KOSPI200/삼성전자) 및 미 증시 동향을 바탕으로 전략적 Bypass 시나리오를 제공합니다."
         
-        Format (v1.2.1 Strategic Master Style):
-        **[코어봇 (CoreBot) v1.2.1 - Strategic Operations Report]**
+        Format (v1.3.0 Unified Operations Style):
+        **[SPK Mobile Bot v1.3.0 - Strategic Operations Report]**
         ... (Standard report structure follows) ...
         """
         return self._generate(prompt)
